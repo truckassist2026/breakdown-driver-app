@@ -6,10 +6,6 @@ const AUTH_ENDPOINTS = {
   verifyOtp: '/api/v1/auth/verify-otp',
 };
 
-// =========================================================
-// SEND DRIVER OTP
-// =========================================================
-
 export async function sendDriverOtp(phone) {
   if (!phone) {
     throw new Error(
@@ -27,10 +23,6 @@ export async function sendDriverOtp(phone) {
     }
   );
 }
-
-// =========================================================
-// VERIFY DRIVER OTP
-// =========================================================
 
 export async function verifyDriverOtp(
   phone,
@@ -60,20 +52,9 @@ export async function verifyDriverOtp(
       }
     );
 
-  // Backend returns:
-  //
-  // {
-  //   accessToken,
-  //   tokenType,
-  //   expiresInSeconds,
-  //   userId,
-  //   role,
-  //   newUser
-  // }
-
   if (!response?.accessToken) {
     throw new Error(
-      'Authentication succeeded but the server did not return an access token.'
+      'Authentication succeeded but no access token was returned.'
     );
   }
 
@@ -89,7 +70,10 @@ export async function verifyDriverOtp(
   );
 
   return {
-    ...response,
+    accessToken: response.accessToken,
+    tokenType: response.tokenType,
+    expiresInSeconds:
+      response.expiresInSeconds,
     user,
   };
 }

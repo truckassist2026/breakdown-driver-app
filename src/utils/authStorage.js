@@ -1,38 +1,85 @@
-import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as SecureStore from 'expo-secure-store';
 import { Platform } from 'react-native';
 
-const TOKEN_KEY = 'truck_assist_access_token';
-const USER_KEY = 'truck_assist_user';
+const TOKEN_KEY =
+  'truckassist_access_token';
+
+const USER_KEY =
+  'truckassist_user';
+
+let SecureStore = null;
+
+if (Platform.OS !== 'web') {
+  SecureStore =
+    require('expo-secure-store');
+}
 
 // =========================================================
-// INTERNAL STORAGE HELPERS
+// SAVE TOKEN
 // =========================================================
 
-async function setStorageItem(key, value) {
+async function setStorage(
+  key,
+  value
+) {
   if (Platform.OS === 'web') {
-    await AsyncStorage.setItem(key, value);
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem(
+        key,
+        value
+      );
+    }
+
     return;
   }
 
-  await SecureStore.setItemAsync(key, value);
+  await SecureStore.setItemAsync(
+    key,
+    value
+  );
 }
 
-async function getStorageItem(key) {
+// =========================================================
+// GET TOKEN
+// =========================================================
+
+async function getStorage(key) {
   if (Platform.OS === 'web') {
-    return AsyncStorage.getItem(key);
+    if (
+      typeof window !== 'undefined'
+    ) {
+      return window.localStorage.getItem(
+        key
+      );
+    }
+
+    return null;
   }
 
-  return SecureStore.getItemAsync(key);
+  return SecureStore.getItemAsync(
+    key
+  );
 }
 
-async function removeStorageItem(key) {
+// =========================================================
+// REMOVE
+// =========================================================
+
+async function removeStorage(key) {
   if (Platform.OS === 'web') {
-    await AsyncStorage.removeItem(key);
+    if (
+      typeof window !== 'undefined'
+    ) {
+      window.localStorage.removeItem(
+        key
+      );
+    }
+
     return;
   }
 
-  await SecureStore.deleteItemAsync(key);
+  await SecureStore.deleteItemAsync(
+    key
+  );
 }
 
 // =========================================================
@@ -43,20 +90,14 @@ export async function saveAuthSession(
   token,
   user
 ) {
-  if (!token) {
-    throw new Error(
-      'Cannot save authentication session without a token.'
-    );
-  }
-
-  await setStorageItem(
+  await setStorage(
     TOKEN_KEY,
     token
   );
 
-  await setStorageItem(
+  await setStorage(
     USER_KEY,
-    JSON.stringify(user || {})
+    JSON.stringify(user)
   );
 }
 
@@ -65,9 +106,7 @@ export async function saveAuthSession(
 // =========================================================
 
 export async function getToken() {
-  return getStorageItem(
-    TOKEN_KEY
-  );
+  return getStorage(TOKEN_KEY);
 }
 
 // =========================================================
@@ -76,9 +115,7 @@ export async function getToken() {
 
 export async function getUser() {
   const value =
-    await getStorageItem(
-      USER_KEY
-    );
+    await getStorage(USER_KEY);
 
   if (!value) {
     return null;
@@ -101,22 +138,11 @@ export async function getUser() {
 // =========================================================
 
 export async function clearAuthSession() {
-  await removeStorageItem(
+  await removeStorage(
     TOKEN_KEY
   );
 
-  await removeStorageItem(
+  await removeStorage(
     USER_KEY
   );
-}
-
-// =========================================================
-// AUTHENTICATED CHECK
-// =========================================================
-
-export async function isAuthenticated() {
-  const token =
-    await getToken();
-
-  return Boolean(token);
 }

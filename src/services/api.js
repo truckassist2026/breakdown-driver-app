@@ -1,4 +1,5 @@
 import API_BASE_URL from '../config/api';
+import { getToken } from '../utils/authStorage';
 
 export async function apiRequest(
   endpoint,
@@ -7,8 +8,11 @@ export async function apiRequest(
   const {
     method = 'GET',
     body,
-    token,
+    token: providedToken,
   } = options;
+
+  const token =
+    providedToken || await getToken();
 
   const headers = {
     Accept: 'application/json',
@@ -24,27 +28,40 @@ export async function apiRequest(
     `${API_BASE_URL}${endpoint}`;
 
   console.log(
-    `[API] ${method} ${url}`
+    `[Truck Assist API] ${method} ${url}`
   );
 
-  const response = await fetch(
-    url,
-    {
-      method,
-      headers,
-      body:
-        body !== undefined
-          ? JSON.stringify(body)
-          : undefined,
-    }
-  );
+  let response;
+
+  try {
+    response = await fetch(
+      url,
+      {
+        method,
+        headers,
+        body:
+          body !== undefined
+            ? JSON.stringify(body)
+            : undefined,
+      }
+    );
+  } catch (error) {
+    console.error(
+      '[Truck Assist API] Network error:',
+      error
+    );
+
+    throw new Error(
+      'Unable to connect to Truck Assist server.'
+    );
+  }
 
   const contentType =
     response.headers.get(
       'content-type'
     ) || '';
 
-  let data;
+  let data = null;
 
   if (
     contentType.includes(
@@ -62,11 +79,10 @@ export async function apiRequest(
   }
 
   if (!response.ok) {
-
     const message =
       data?.message ||
       data?.error ||
-      `Request failed (${response.status})`;
+      `Request failed with status ${response.status}`;
 
     const error =
       new Error(message);
@@ -74,7 +90,8 @@ export async function apiRequest(
     error.status =
       response.status;
 
-    error.data = data;
+    error.data =
+      data;
 
     throw error;
   }

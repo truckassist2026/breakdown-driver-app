@@ -3,7 +3,7 @@ import { Tabs } from 'expo-router';
 
 import colors from '../../constants/colors';
 
-export default function TabLayout() {
+export default function TabsLayout() {
   return (
     <Tabs
       screenOptions={{
@@ -16,22 +16,16 @@ export default function TabLayout() {
           colors.textMuted,
 
         tabBarStyle: {
-          height: 72,
-
-          paddingTop: 8,
-          paddingBottom: 10,
-
-          backgroundColor:
-            colors.white,
-
+          height: 68,
+          paddingTop: 7,
+          paddingBottom: 8,
+          backgroundColor: colors.white,
           borderTopWidth: 1,
-
-          borderTopColor:
-            colors.border,
+          borderTopColor: colors.borderLight,
         },
 
         tabBarLabelStyle: {
-          fontSize: 11,
+          fontSize: 10,
           fontWeight: '600',
         },
       }}
@@ -65,25 +59,7 @@ export default function TabLayout() {
             size,
           }) => (
             <Ionicons
-              name="document-text-outline"
-              size={size}
-              color={color}
-            />
-          ),
-        }}
-      />
-
-      <Tabs.Screen
-        name="vehicle"
-        options={{
-          title: 'Vehicle',
-
-          tabBarIcon: ({
-            color,
-            size,
-          }) => (
-            <Ionicons
-              name="car-outline"
+              name="clipboard-outline"
               size={size}
               color={color}
             />
