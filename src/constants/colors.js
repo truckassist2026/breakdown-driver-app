@@ -1,0 +1,47 @@
+const colors = {
+  primary: '#0F172A',
+  primaryLight: '#1E293B',
+
+  accent: '#2563EB',
+  accentDark: '#1D4ED8',
+  accentLight: '#EFF6FF',
+
+  background: '#F8FAFC',
+  surface: '#FFFFFF',
+  white: '#FFFFFF',
+
+  text: '#0F172A',
+  textSecondary: '#475569',
+  textMuted: '#64748B',
+  textLight: '#94A3B8',
+
+  border: '#E2E8F0',
+  borderLight: '#F1F5F9',
+
+  success: '#16A34A',
+  successDark: '#15803D',
+  successLight: '#DCFCE7',
+
+  warning: '#F59E0B',
+  warningLight: '#FEF3C7',
+
+  danger: '#DC2626',
+  dangerLight: '#FEE2E2',
+
+  info: '#0284C7',
+  infoLight: '#E0F2FE',
+
+  serviceBattery: '#F59E0B',
+  serviceEngine: '#7C3AED',
+  serviceTyre: '#0F172A',
+  serviceFuel: '#EA580C',
+  serviceElectrical: '#2563EB',
+  serviceOther: '#64748B',
+
+  mapBackground: '#E8EEF3',
+  mapRoad: '#FFFFFF',
+
+  shadow: '#0F172A',
+};
+
+export default colors;
