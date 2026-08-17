@@ -1,6 +1,7 @@
 import { useState } from 'react';
 
 import {
+  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -16,31 +17,60 @@ import { useRouter } from 'expo-router';
 
 import colors from '../constants/colors';
 import spacing from '../constants/spacing';
+import { sendDriverOtp } from '../services/authService';
 
 export default function LoginScreen() {
   const router = useRouter();
 
   const [mobile, setMobile] = useState('');
+  const [loading, setLoading] = useState(false);
 
   const isValidMobile = mobile.length === 10;
 
-  const handleContinue = () => {
-    if (!isValidMobile) {
+  // =========================================================
+  // SEND OTP
+  // =========================================================
+
+  const handleContinue = async () => {
+    if (!isValidMobile || loading) {
       return;
     }
 
-    router.push({
-      pathname: '/otp',
-      params: {
-        mobile,
-      },
-    });
+    try {
+      setLoading(true);
+
+      await sendDriverOtp(mobile);
+
+      router.push({
+        pathname: '/otp',
+        params: {
+          mobile,
+        },
+      });
+    } catch (error) {
+      console.error(
+        'Driver OTP request failed:',
+        error
+      );
+
+      Alert.alert(
+        'Unable to continue',
+        error?.message ||
+          'Unable to send OTP. Please try again.'
+      );
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior={
+        Platform.OS === 'ios'
+          ? 'padding'
+          : undefined
+      }
     >
       <ScrollView
         contentContainerStyle={styles.content}
@@ -65,6 +95,7 @@ export default function LoginScreen() {
             </View>
 
             <View>
+
               <Text style={styles.brandTitle}>
                 RoadAssist
               </Text>
@@ -72,12 +103,12 @@ export default function LoginScreen() {
               <Text style={styles.brandSubtitle}>
                 Roadside assistance
               </Text>
+
             </View>
 
           </View>
 
         </View>
-
 
         {/* =====================================================
             INTRO
@@ -100,23 +131,21 @@ export default function LoginScreen() {
 
         </View>
 
-
         {/* =====================================================
             LOGIN CARD
         ===================================================== */}
 
         <View style={styles.card}>
 
-          {/* Icon */}
-
           <View style={styles.iconBox}>
+
             <Ionicons
               name="shield-checkmark-outline"
               size={25}
               color={colors.accent}
             />
-          </View>
 
+          </View>
 
           <Text style={styles.cardTitle}>
             Driver sign in
@@ -125,7 +154,6 @@ export default function LoginScreen() {
           <Text style={styles.cardDescription}>
             Enter your mobile number to continue.
           </Text>
-
 
           {/* =================================================
               MOBILE NUMBER
@@ -146,9 +174,11 @@ export default function LoginScreen() {
             >
 
               <View style={styles.countryCode}>
+
                 <Text style={styles.countryCodeText}>
                   +91
                 </Text>
+
               </View>
 
               <View style={styles.divider} />
@@ -157,9 +187,11 @@ export default function LoginScreen() {
                 style={styles.input}
                 value={mobile}
                 onChangeText={(value) => {
-                  const number = value
-                    .replace(/[^0-9]/g, '')
-                    .slice(0, 10);
+
+                  const number =
+                    value
+                      .replace(/[^0-9]/g, '')
+                      .slice(0, 10);
 
                   setMobile(number);
                 }}
@@ -168,22 +200,24 @@ export default function LoginScreen() {
                 keyboardType="phone-pad"
                 maxLength={10}
                 autoFocus={false}
+                editable={!loading}
               />
 
               {mobile.length === 10 && (
                 <View style={styles.validIcon}>
+
                   <Ionicons
                     name="checkmark-circle"
                     size={21}
                     color={colors.success}
                   />
+
                 </View>
               )}
 
             </View>
 
           </View>
-
 
           {/* =================================================
               CONTINUE
@@ -192,44 +226,47 @@ export default function LoginScreen() {
           <TouchableOpacity
             style={[
               styles.continueButton,
-              !isValidMobile &&
+              (!isValidMobile || loading) &&
                 styles.continueButtonDisabled,
             ]}
             onPress={handleContinue}
-            disabled={!isValidMobile}
+            disabled={!isValidMobile || loading}
             activeOpacity={0.85}
           >
 
             <Text
               style={[
                 styles.continueText,
-                !isValidMobile &&
+                (!isValidMobile || loading) &&
                   styles.continueTextDisabled,
               ]}
             >
-              CONTINUE
+              {loading
+                ? 'SENDING...'
+                : 'CONTINUE'}
             </Text>
 
             <View
               style={[
                 styles.arrowBox,
-                !isValidMobile &&
+                (!isValidMobile || loading) &&
                   styles.arrowBoxDisabled,
               ]}
             >
+
               <Ionicons
                 name="arrow-forward"
                 size={19}
                 color={
-                  isValidMobile
+                  isValidMobile && !loading
                     ? colors.white
                     : colors.textLight
                 }
               />
+
             </View>
 
           </TouchableOpacity>
-
 
           {/* =================================================
               OTP INFORMATION
@@ -238,11 +275,13 @@ export default function LoginScreen() {
           <View style={styles.infoRow}>
 
             <View style={styles.infoIcon}>
+
               <Ionicons
                 name="lock-closed-outline"
                 size={16}
                 color={colors.textMuted}
               />
+
             </View>
 
             <Text style={styles.infoText}>
@@ -254,7 +293,6 @@ export default function LoginScreen() {
 
         </View>
 
-
         {/* =====================================================
             SAFETY CARD
         ===================================================== */}
@@ -262,11 +300,13 @@ export default function LoginScreen() {
         <View style={styles.safetyCard}>
 
           <View style={styles.safetyIcon}>
+
             <Ionicons
               name="flash-outline"
               size={20}
               color={colors.accent}
             />
+
           </View>
 
           <View style={styles.safetyContent}>
@@ -284,7 +324,6 @@ export default function LoginScreen() {
 
         </View>
 
-
         {/* =====================================================
             FOOTER
         ===================================================== */}
@@ -298,12 +337,11 @@ export default function LoginScreen() {
   );
 }
 
-
 const styles = StyleSheet.create({
 
-  /* =========================================================
-     SCREEN
-  ========================================================= */
+  // =========================================================
+  // SCREEN
+  // =========================================================
 
   container: {
     flex: 1,
@@ -317,10 +355,9 @@ const styles = StyleSheet.create({
     paddingBottom: 28,
   },
 
-
-  /* =========================================================
-     HEADER
-  ========================================================= */
+  // =========================================================
+  // HEADER
+  // =========================================================
 
   header: {
     height: 58,
@@ -356,10 +393,9 @@ const styles = StyleSheet.create({
     marginTop: 1,
   },
 
-
-  /* =========================================================
-     INTRO
-  ========================================================= */
+  // =========================================================
+  // INTRO
+  // =========================================================
 
   intro: {
     marginTop: 27,
@@ -390,10 +426,9 @@ const styles = StyleSheet.create({
     maxWidth: 390,
   },
 
-
-  /* =========================================================
-     LOGIN CARD
-  ========================================================= */
+  // =========================================================
+  // LOGIN CARD
+  // =========================================================
 
   card: {
     backgroundColor: colors.white,
@@ -436,10 +471,9 @@ const styles = StyleSheet.create({
     marginBottom: 22,
   },
 
-
-  /* =========================================================
-     FIELD
-  ========================================================= */
+  // =========================================================
+  // FIELD
+  // =========================================================
 
   field: {
     marginBottom: 17,
@@ -497,10 +531,9 @@ const styles = StyleSheet.create({
     marginRight: 13,
   },
 
-
-  /* =========================================================
-     CONTINUE BUTTON
-  ========================================================= */
+  // =========================================================
+  // CONTINUE BUTTON
+  // =========================================================
 
   continueButton: {
     height: spacing.buttonHeight,
@@ -541,10 +574,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.border,
   },
 
-
-  /* =========================================================
-     OTP INFO
-  ========================================================= */
+  // =========================================================
+  // OTP INFO
+  // =========================================================
 
   infoRow: {
     flexDirection: 'row',
@@ -573,10 +605,9 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
   },
 
-
-  /* =========================================================
-     SAFETY CARD
-  ========================================================= */
+  // =========================================================
+  // SAFETY CARD
+  // =========================================================
 
   safetyCard: {
     marginTop: 17,
@@ -615,10 +646,9 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
 
-
-  /* =========================================================
-     FOOTER
-  ========================================================= */
+  // =========================================================
+  // FOOTER
+  // =========================================================
 
   footer: {
     fontFamily: 'InterRegular',
@@ -627,5 +657,4 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 22,
   },
-
 });

@@ -1,4 +1,8 @@
-import { useEffect, useRef, useState } from 'react';
+import {
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
 
 import {
   KeyboardAvoidingView,
@@ -12,102 +16,201 @@ import {
 } from 'react-native';
 
 import { Ionicons } from '@expo/vector-icons';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+
+import {
+  useLocalSearchParams,
+  useRouter,
+} from 'expo-router';
 
 import colors from '../constants/colors';
 import spacing from '../constants/spacing';
 
+import {
+  sendDriverOtp,
+  verifyDriverOtp,
+} from '../services/authService';
+
 export default function OTPScreen() {
   const router = useRouter();
 
-  const params = useLocalSearchParams();
+  const params =
+    useLocalSearchParams();
 
-  const mobile = params.mobile || '';
+  const mobile =
+    params.mobile || '';
 
-  const [otp, setOtp] = useState('');
-  const [seconds, setSeconds] = useState(30);
-  const [error, setError] = useState('');
+  const [otp, setOtp] =
+    useState('');
 
-  const inputRef = useRef(null);
+  const [seconds, setSeconds] =
+    useState(60);
 
-  /* =========================================================
-     TIMER
-  ========================================================= */
+  const [error, setError] =
+    useState('');
+
+  const [loading, setLoading] =
+    useState(false);
+
+  const inputRef =
+    useRef(null);
+
+  // =========================================================
+  // TIMER
+  // =========================================================
 
   useEffect(() => {
+
     if (seconds <= 0) {
       return;
     }
 
-    const timer = setInterval(() => {
-      setSeconds((previous) => previous - 1);
-    }, 1000);
+    const timer =
+      setInterval(() => {
 
-    return () => clearInterval(timer);
+        setSeconds(
+          (previous) =>
+            previous - 1
+        );
+
+      }, 1000);
+
+    return () =>
+      clearInterval(timer);
+
   }, [seconds]);
 
+  // =========================================================
+  // VERIFY OTP
+  // =========================================================
 
-  /* =========================================================
-     VERIFY
-  ========================================================= */
+  const handleVerify =
+    async () => {
 
-  const handleVerify = () => {
-    /*
-      TEMPORARY TEST OTP
+      if (otp.length !== 6) {
 
-      For now:
-      123456
+        setError(
+          'Please enter the 6-digit verification code.'
+        );
 
-      Later this will call:
-      Spring Boot → PostgreSQL
-    */
+        return;
+      }
 
-    if (otp.length !== 6) {
-      setError('Please enter the 6-digit verification code.');
-      return;
-    }
+      if (loading) {
+        return;
+      }
 
-    if (otp !== '123456') {
-      setError('Invalid verification code. Please try again.');
-      return;
-    }
+      try {
 
-    setError('');
+        setLoading(true);
+        setError('');
 
-    // Existing Driver Home
-    router.replace('/(tabs)/home');
-  };
+        await verifyDriverOtp(
+          mobile,
+          otp
+        );
 
+        /*
+         * JWT has now been stored
+         * securely by authService.
+         *
+         * Navigate to existing
+         * Driver Home.
+         */
 
-  /* =========================================================
-     RESEND
-  ========================================================= */
+        router.replace(
+          '/(tabs)/home'
+        );
 
-  const handleResend = () => {
-    if (seconds > 0) {
-      return;
-    }
+      } catch (error) {
 
-    setSeconds(30);
-    setOtp('');
-    setError('');
-  };
+        console.error(
+          'OTP verification failed:',
+          error
+        );
 
+        setError(
+          error?.message ||
+            'Invalid verification code. Please try again.'
+        );
 
-  /* =========================================================
-     FORMAT MOBILE
-  ========================================================= */
+      } finally {
+
+        setLoading(false);
+
+      }
+    };
+
+  // =========================================================
+  // RESEND OTP
+  // =========================================================
+
+  const handleResend =
+    async () => {
+
+      if (
+        seconds > 0 ||
+        loading
+      ) {
+        return;
+      }
+
+      try {
+
+        setLoading(true);
+        setError('');
+
+        await sendDriverOtp(
+          mobile
+        );
+
+        setSeconds(60);
+        setOtp('');
+
+        /*
+         * Focus OTP input again.
+         */
+
+        setTimeout(() => {
+          inputRef.current?.focus();
+        }, 100);
+
+      } catch (error) {
+
+        console.error(
+          'OTP resend failed:',
+          error
+        );
+
+        setError(
+          error?.message ||
+            'Unable to resend OTP. Please try again.'
+        );
+
+      } finally {
+
+        setLoading(false);
+
+      }
+    };
+
+  // =========================================================
+  // FORMAT MOBILE
+  // =========================================================
 
   const maskedMobile =
     mobile.length === 10
       ? `+91 ${mobile.slice(0, 2)}******${mobile.slice(-2)}`
       : '+91 ******';
 
-
   return (
+
     <KeyboardAvoidingView
       style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : undefined}
+      behavior={
+        Platform.OS === 'ios'
+          ? 'padding'
+          : undefined
+      }
     >
 
       <ScrollView
@@ -126,15 +229,19 @@ export default function OTPScreen() {
             style={styles.backButton}
             onPress={() => router.back()}
             activeOpacity={0.8}
+            disabled={loading}
           >
+
             <Ionicons
               name="arrow-back"
               size={21}
               color={colors.text}
             />
+
           </TouchableOpacity>
 
           <View>
+
             <Text style={styles.headerTitle}>
               Verification
             </Text>
@@ -142,10 +249,10 @@ export default function OTPScreen() {
             <Text style={styles.headerSubtitle}>
               Confirm your mobile number
             </Text>
+
           </View>
 
         </View>
-
 
         {/* =====================================================
             INTRO
@@ -154,11 +261,13 @@ export default function OTPScreen() {
         <View style={styles.intro}>
 
           <View style={styles.iconBox}>
+
             <Ionicons
               name="chatbubble-ellipses-outline"
               size={25}
               color={colors.accent}
             />
+
           </View>
 
           <Text style={styles.title}>
@@ -175,7 +284,6 @@ export default function OTPScreen() {
 
         </View>
 
-
         {/* =====================================================
             OTP CARD
         ===================================================== */}
@@ -185,7 +293,6 @@ export default function OTPScreen() {
           <Text style={styles.label}>
             Verification code
           </Text>
-
 
           {/* =================================================
               OTP INPUT
@@ -197,54 +304,72 @@ export default function OTPScreen() {
               ref={inputRef}
               value={otp}
               onChangeText={(value) => {
-                const cleaned = value
-                  .replace(/[^0-9]/g, '')
-                  .slice(0, 6);
+
+                const cleaned =
+                  value
+                    .replace(/[^0-9]/g, '')
+                    .slice(0, 6);
 
                 setOtp(cleaned);
                 setError('');
+
               }}
               keyboardType="number-pad"
               maxLength={6}
               autoFocus
+              editable={!loading}
               style={styles.otpInput}
               caretHidden={false}
             />
 
-            {Array.from({ length: 6 }).map(
+            {Array.from({
+              length: 6,
+            }).map(
               (_, index) => {
 
-                const value = otp[index];
+                const value =
+                  otp[index];
 
                 return (
+
                   <TouchableOpacity
                     key={index}
                     style={[
                       styles.otpBox,
+
                       index === otp.length &&
                         styles.otpBoxActive,
+
                       error &&
                         styles.otpBoxError,
                     ]}
-                    onPress={() => inputRef.current?.focus()}
+                    onPress={() =>
+                      inputRef.current?.focus()
+                    }
                     activeOpacity={0.9}
+                    disabled={loading}
                   >
-                    <Text style={styles.otpDigit}>
+
+                    <Text
+                      style={styles.otpDigit}
+                    >
                       {value || ''}
                     </Text>
+
                   </TouchableOpacity>
+
                 );
               }
             )}
 
           </View>
 
-
           {/* =================================================
               ERROR
           ================================================= */}
 
           {error ? (
+
             <View style={styles.errorRow}>
 
               <Ionicons
@@ -258,8 +383,8 @@ export default function OTPScreen() {
               </Text>
 
             </View>
-          ) : null}
 
+          ) : null}
 
           {/* =================================================
               VERIFY BUTTON
@@ -268,28 +393,39 @@ export default function OTPScreen() {
           <TouchableOpacity
             style={[
               styles.verifyButton,
-              otp.length !== 6 &&
+
+              (otp.length !== 6 ||
+                loading) &&
                 styles.verifyButtonDisabled,
             ]}
             onPress={handleVerify}
-            disabled={otp.length !== 6}
+            disabled={
+              otp.length !== 6 ||
+              loading
+            }
             activeOpacity={0.85}
           >
 
             <Text
               style={[
                 styles.verifyText,
-                otp.length !== 6 &&
+
+                (otp.length !== 6 ||
+                  loading) &&
                   styles.verifyTextDisabled,
               ]}
             >
-              VERIFY & CONTINUE
+              {loading
+                ? 'VERIFYING...'
+                : 'VERIFY & CONTINUE'}
             </Text>
 
             <View
               style={[
                 styles.arrowBox,
-                otp.length !== 6 &&
+
+                (otp.length !== 6 ||
+                  loading) &&
                   styles.arrowBoxDisabled,
               ]}
             >
@@ -298,7 +434,8 @@ export default function OTPScreen() {
                 name="arrow-forward"
                 size={19}
                 color={
-                  otp.length === 6
+                  otp.length === 6 &&
+                  !loading
                     ? colors.white
                     : colors.textLight
                 }
@@ -307,7 +444,6 @@ export default function OTPScreen() {
             </View>
 
           </TouchableOpacity>
-
 
           {/* =================================================
               RESEND
@@ -330,10 +466,13 @@ export default function OTPScreen() {
               <TouchableOpacity
                 onPress={handleResend}
                 activeOpacity={0.7}
+                disabled={loading}
               >
+
                 <Text style={styles.resendText}>
                   Resend code
                 </Text>
+
               </TouchableOpacity>
 
             )}
@@ -341,7 +480,6 @@ export default function OTPScreen() {
           </View>
 
         </View>
-
 
         {/* =====================================================
             SECURITY CARD
@@ -374,7 +512,6 @@ export default function OTPScreen() {
 
         </View>
 
-
         <Text style={styles.footer}>
           Safe • Fast • Reliable
         </Text>
@@ -385,12 +522,11 @@ export default function OTPScreen() {
   );
 }
 
-
 const styles = StyleSheet.create({
 
-  /* =========================================================
-     SCREEN
-  ========================================================= */
+  // =========================================================
+  // SCREEN
+  // =========================================================
 
   container: {
     flex: 1,
@@ -399,15 +535,15 @@ const styles = StyleSheet.create({
 
   content: {
     flexGrow: 1,
-    paddingHorizontal: spacing.screenHorizontal,
+    paddingHorizontal:
+      spacing.screenHorizontal,
     paddingTop: 20,
     paddingBottom: 30,
   },
 
-
-  /* =========================================================
-     HEADER
-  ========================================================= */
+  // =========================================================
+  // HEADER
+  // =========================================================
 
   header: {
     minHeight: 58,
@@ -440,10 +576,9 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
 
-
-  /* =========================================================
-     INTRO
-  ========================================================= */
+  // =========================================================
+  // INTRO
+  // =========================================================
 
   intro: {
     marginTop: 30,
@@ -482,10 +617,9 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
 
-
-  /* =========================================================
-     CARD
-  ========================================================= */
+  // =========================================================
+  // CARD
+  // =========================================================
 
   card: {
     backgroundColor: colors.white,
@@ -511,10 +645,9 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
 
-
-  /* =========================================================
-     OTP
-  ========================================================= */
+  // =========================================================
+  // OTP
+  // =========================================================
 
   otpContainer: {
     flexDirection: 'row',
@@ -555,10 +688,9 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
 
-
-  /* =========================================================
-     ERROR
-  ========================================================= */
+  // =========================================================
+  // ERROR
+  // =========================================================
 
   errorRow: {
     flexDirection: 'row',
@@ -571,12 +703,12 @@ const styles = StyleSheet.create({
     fontSize: 10,
     color: colors.danger,
     marginLeft: 5,
+    flex: 1,
   },
 
-
-  /* =========================================================
-     VERIFY
-  ========================================================= */
+  // =========================================================
+  // VERIFY
+  // =========================================================
 
   verifyButton: {
     height: spacing.buttonHeight,
@@ -617,10 +749,9 @@ const styles = StyleSheet.create({
     backgroundColor: colors.border,
   },
 
-
-  /* =========================================================
-     RESEND
-  ========================================================= */
+  // =========================================================
+  // RESEND
+  // =========================================================
 
   resendContainer: {
     flexDirection: 'row',
@@ -648,10 +779,9 @@ const styles = StyleSheet.create({
     marginLeft: 4,
   },
 
-
-  /* =========================================================
-     SECURITY
-  ========================================================= */
+  // =========================================================
+  // SECURITY
+  // =========================================================
 
   securityCard: {
     marginTop: 17,
@@ -690,10 +820,9 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
 
-
-  /* =========================================================
-     FOOTER
-  ========================================================= */
+  // =========================================================
+  // FOOTER
+  // =========================================================
 
   footer: {
     fontFamily: 'InterRegular',
