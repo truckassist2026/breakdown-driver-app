@@ -30,8 +30,21 @@ import {
   verifyDriverOtp,
 } from '../services/authService';
 
+import {
+  getToken,
+  getUser,
+} from '../utils/authStorage';
+
+import {
+  useAuth,
+} from '../context/AuthContext';
+
 export default function OTPScreen() {
   const router = useRouter();
+
+  const {
+    login,
+  } = useAuth();
 
   const params =
     useLocalSearchParams();
@@ -59,24 +72,20 @@ export default function OTPScreen() {
   // =========================================================
 
   useEffect(() => {
-
     if (seconds <= 0) {
       return;
     }
 
     const timer =
       setInterval(() => {
-
         setSeconds(
           (previous) =>
             previous - 1
         );
-
       }, 1000);
 
     return () =>
       clearInterval(timer);
-
   }, [seconds]);
 
   // =========================================================
@@ -87,7 +96,6 @@ export default function OTPScreen() {
     async () => {
 
       if (otp.length !== 6) {
-
         setError(
           'Please enter the 6-digit verification code.'
         );
@@ -100,29 +108,65 @@ export default function OTPScreen() {
       }
 
       try {
-
         setLoading(true);
         setError('');
+
+        // ===================================================
+        // VERIFY OTP WITH BACKEND
+        // ===================================================
 
         await verifyDriverOtp(
           mobile,
           otp
         );
 
-        /*
-         * JWT has now been stored
-         * securely by authService.
-         *
-         * Navigate to existing
-         * Driver Home.
-         */
+        // ===================================================
+        // AUTH SERVICE HAS STORED JWT
+        // READ STORED SESSION
+        // ===================================================
+
+        const storedToken =
+          await getToken();
+
+        const storedUser =
+          await getUser();
+
+        console.log(
+          '[OTP] Token received:',
+          Boolean(storedToken)
+        );
+
+        if (!storedToken) {
+          throw new Error(
+            'Authentication token was not received.'
+          );
+        }
+
+        // ===================================================
+        // SYNCHRONIZE AUTH CONTEXT
+        // ===================================================
+
+        await login(
+          storedToken,
+          storedUser || {
+            mobile,
+            role: 'DRIVER',
+          }
+        );
+
+        console.log(
+          '[OTP] Authentication successful'
+        );
+
+        // ===================================================
+        // GO TO DRIVER HOME
+        // ===================================================
 
         router.replace(
           '/(tabs)/home'
         );
 
       } catch (error) {
-
         console.error(
           'OTP verification failed:',
           error
@@ -134,9 +178,7 @@ export default function OTPScreen() {
         );
 
       } finally {
-
         setLoading(false);
-
       }
     };
 
@@ -155,7 +197,6 @@ export default function OTPScreen() {
       }
 
       try {
-
         setLoading(true);
         setError('');
 
@@ -166,16 +207,12 @@ export default function OTPScreen() {
         setSeconds(60);
         setOtp('');
 
-        /*
-         * Focus OTP input again.
-         */
-
+        // Focus OTP input again
         setTimeout(() => {
           inputRef.current?.focus();
         }, 100);
 
       } catch (error) {
-
         console.error(
           'OTP resend failed:',
           error
@@ -187,9 +224,7 @@ export default function OTPScreen() {
         );
 
       } finally {
-
         setLoading(false);
-
       }
     };
 
@@ -202,8 +237,11 @@ export default function OTPScreen() {
       ? `+91 ${mobile.slice(0, 2)}******${mobile.slice(-2)}`
       : '+91 ******';
 
-  return (
+  // =========================================================
+  // UI
+  // =========================================================
 
+  return (
     <KeyboardAvoidingView
       style={styles.container}
       behavior={
@@ -214,8 +252,12 @@ export default function OTPScreen() {
     >
 
       <ScrollView
-        contentContainerStyle={styles.content}
-        showsVerticalScrollIndicator={false}
+        contentContainerStyle={
+          styles.content
+        }
+        showsVerticalScrollIndicator={
+          false
+        }
         keyboardShouldPersistTaps="handled"
       >
 
@@ -227,7 +269,9 @@ export default function OTPScreen() {
 
           <TouchableOpacity
             style={styles.backButton}
-            onPress={() => router.back()}
+            onPress={() =>
+              router.back()
+            }
             activeOpacity={0.8}
             disabled={loading}
           >
@@ -242,11 +286,15 @@ export default function OTPScreen() {
 
           <View>
 
-            <Text style={styles.headerTitle}>
+            <Text
+              style={styles.headerTitle}
+            >
               Verification
             </Text>
 
-            <Text style={styles.headerSubtitle}>
+            <Text
+              style={styles.headerSubtitle}
+            >
               Confirm your mobile number
             </Text>
 
@@ -274,7 +322,9 @@ export default function OTPScreen() {
             Enter verification code
           </Text>
 
-          <Text style={styles.description}>
+          <Text
+            style={styles.description}
+          >
             We've sent a 6-digit verification code to
           </Text>
 
@@ -298,7 +348,11 @@ export default function OTPScreen() {
               OTP INPUT
           ================================================= */}
 
-          <View style={styles.otpContainer}>
+          <View
+            style={
+              styles.otpContainer
+            }
+          >
 
             <TextInput
               ref={inputRef}
@@ -307,7 +361,10 @@ export default function OTPScreen() {
 
                 const cleaned =
                   value
-                    .replace(/[^0-9]/g, '')
+                    .replace(
+                      /[^0-9]/g,
+                      ''
+                    )
                     .slice(0, 6);
 
                 setOtp(cleaned);
@@ -331,13 +388,13 @@ export default function OTPScreen() {
                   otp[index];
 
                 return (
-
                   <TouchableOpacity
                     key={index}
                     style={[
                       styles.otpBox,
 
-                      index === otp.length &&
+                      index ===
+                        otp.length &&
                         styles.otpBoxActive,
 
                       error &&
@@ -351,13 +408,14 @@ export default function OTPScreen() {
                   >
 
                     <Text
-                      style={styles.otpDigit}
+                      style={
+                        styles.otpDigit
+                      }
                     >
                       {value || ''}
                     </Text>
 
                   </TouchableOpacity>
-
                 );
               }
             )}
@@ -370,7 +428,9 @@ export default function OTPScreen() {
 
           {error ? (
 
-            <View style={styles.errorRow}>
+            <View
+              style={styles.errorRow}
+            >
 
               <Ionicons
                 name="alert-circle-outline"
@@ -378,7 +438,9 @@ export default function OTPScreen() {
                 color={colors.danger}
               />
 
-              <Text style={styles.errorText}>
+              <Text
+                style={styles.errorText}
+              >
                 {error}
               </Text>
 
@@ -394,11 +456,15 @@ export default function OTPScreen() {
             style={[
               styles.verifyButton,
 
-              (otp.length !== 6 ||
-                loading) &&
+              (
+                otp.length !== 6 ||
+                loading
+              ) &&
                 styles.verifyButtonDisabled,
             ]}
-            onPress={handleVerify}
+            onPress={
+              handleVerify
+            }
             disabled={
               otp.length !== 6 ||
               loading
@@ -410,8 +476,10 @@ export default function OTPScreen() {
               style={[
                 styles.verifyText,
 
-                (otp.length !== 6 ||
-                  loading) &&
+                (
+                  otp.length !== 6 ||
+                  loading
+                ) &&
                   styles.verifyTextDisabled,
               ]}
             >
@@ -424,8 +492,10 @@ export default function OTPScreen() {
               style={[
                 styles.arrowBox,
 
-                (otp.length !== 6 ||
-                  loading) &&
+                (
+                  otp.length !== 6 ||
+                  loading
+                ) &&
                   styles.arrowBoxDisabled,
               ]}
             >
@@ -449,27 +519,43 @@ export default function OTPScreen() {
               RESEND
           ================================================= */}
 
-          <View style={styles.resendContainer}>
+          <View
+            style={
+              styles.resendContainer
+            }
+          >
 
-            <Text style={styles.resendLabel}>
+            <Text
+              style={
+                styles.resendLabel
+              }
+            >
               Didn't receive the code?
             </Text>
 
             {seconds > 0 ? (
 
-              <Text style={styles.timerText}>
+              <Text
+                style={styles.timerText}
+              >
                 Resend in {seconds}s
               </Text>
 
             ) : (
 
               <TouchableOpacity
-                onPress={handleResend}
+                onPress={
+                  handleResend
+                }
                 activeOpacity={0.7}
                 disabled={loading}
               >
 
-                <Text style={styles.resendText}>
+                <Text
+                  style={
+                    styles.resendText
+                  }
+                >
                   Resend code
                 </Text>
 
@@ -485,9 +571,17 @@ export default function OTPScreen() {
             SECURITY CARD
         ===================================================== */}
 
-        <View style={styles.securityCard}>
+        <View
+          style={
+            styles.securityCard
+          }
+        >
 
-          <View style={styles.securityIcon}>
+          <View
+            style={
+              styles.securityIcon
+            }
+          >
 
             <Ionicons
               name="shield-checkmark-outline"
@@ -497,13 +591,25 @@ export default function OTPScreen() {
 
           </View>
 
-          <View style={styles.securityContent}>
+          <View
+            style={
+              styles.securityContent
+            }
+          >
 
-            <Text style={styles.securityTitle}>
+            <Text
+              style={
+                styles.securityTitle
+              }
+            >
               Secure verification
             </Text>
 
-            <Text style={styles.securityText}>
+            <Text
+              style={
+                styles.securityText
+              }
+            >
               Your verification code keeps your RoadAssist
               account secure.
             </Text>
@@ -522,314 +628,369 @@ export default function OTPScreen() {
   );
 }
 
-const styles = StyleSheet.create({
+// =========================================================
+// STYLES
+// =========================================================
 
-  // =========================================================
-  // SCREEN
-  // =========================================================
+const styles =
+  StyleSheet.create({
 
-  container: {
-    flex: 1,
-    backgroundColor: colors.background,
-  },
+    // =======================================================
+    // SCREEN
+    // =======================================================
 
-  content: {
-    flexGrow: 1,
-    paddingHorizontal:
-      spacing.screenHorizontal,
-    paddingTop: 20,
-    paddingBottom: 30,
-  },
-
-  // =========================================================
-  // HEADER
-  // =========================================================
-
-  header: {
-    minHeight: 58,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-
-  backButton: {
-    width: 43,
-    height: 43,
-    borderRadius: 14,
-    backgroundColor: colors.white,
-    borderWidth: 1,
-    borderColor: colors.border,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 11,
-  },
-
-  headerTitle: {
-    fontFamily: 'InterBold',
-    fontSize: 17,
-    color: colors.text,
-  },
-
-  headerSubtitle: {
-    fontFamily: 'InterRegular',
-    fontSize: 10,
-    color: colors.textMuted,
-    marginTop: 2,
-  },
-
-  // =========================================================
-  // INTRO
-  // =========================================================
-
-  intro: {
-    marginTop: 30,
-    marginBottom: 23,
-  },
-
-  iconBox: {
-    width: 50,
-    height: 50,
-    borderRadius: 15,
-    backgroundColor: colors.accentLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: 14,
-  },
-
-  title: {
-    fontFamily: 'InterBold',
-    fontSize: 25,
-    lineHeight: 30,
-    color: colors.text,
-    letterSpacing: -0.4,
-  },
-
-  description: {
-    fontFamily: 'InterRegular',
-    fontSize: 13,
-    color: colors.textMuted,
-    marginTop: 6,
-  },
-
-  mobile: {
-    fontFamily: 'InterSemiBold',
-    fontSize: 13,
-    color: colors.text,
-    marginTop: 3,
-  },
-
-  // =========================================================
-  // CARD
-  // =========================================================
-
-  card: {
-    backgroundColor: colors.white,
-    borderRadius: spacing.radiusLarge,
-    padding: spacing.cardPadding,
-    borderWidth: 1,
-    borderColor: colors.borderLight,
-
-    shadowColor: colors.shadow,
-    shadowOffset: {
-      width: 0,
-      height: 7,
+    container: {
+      flex: 1,
+      backgroundColor:
+        colors.background,
     },
-    shadowOpacity: 0.07,
-    shadowRadius: 16,
-    elevation: 3,
-  },
 
-  label: {
-    fontFamily: 'InterSemiBold',
-    fontSize: 12,
-    color: colors.text,
-    marginBottom: 10,
-  },
+    content: {
+      flexGrow: 1,
+      paddingHorizontal:
+        spacing.screenHorizontal,
+      paddingTop: 20,
+      paddingBottom: 30,
+    },
 
-  // =========================================================
-  // OTP
-  // =========================================================
+    // =======================================================
+    // HEADER
+    // =======================================================
 
-  otpContainer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    position: 'relative',
-  },
+    header: {
+      minHeight: 58,
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
 
-  otpInput: {
-    position: 'absolute',
-    width: 1,
-    height: 1,
-    opacity: 0,
-  },
+    backButton: {
+      width: 43,
+      height: 43,
+      borderRadius: 14,
+      backgroundColor:
+        colors.white,
+      borderWidth: 1,
+      borderColor:
+        colors.border,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginRight: 11,
+    },
 
-  otpBox: {
-    width: 43,
-    height: 54,
-    borderRadius: spacing.radiusMedium,
-    borderWidth: 1,
-    borderColor: colors.border,
-    backgroundColor: colors.background,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+    headerTitle: {
+      fontFamily:
+        'InterBold',
+      fontSize: 17,
+      color: colors.text,
+    },
 
-  otpBoxActive: {
-    borderColor: colors.accent,
-    backgroundColor: colors.accentLight,
-  },
+    headerSubtitle: {
+      fontFamily:
+        'InterRegular',
+      fontSize: 10,
+      color:
+        colors.textMuted,
+      marginTop: 2,
+    },
 
-  otpBoxError: {
-    borderColor: colors.danger,
-  },
+    // =======================================================
+    // INTRO
+    // =======================================================
 
-  otpDigit: {
-    fontFamily: 'InterBold',
-    fontSize: 20,
-    color: colors.text,
-  },
+    intro: {
+      marginTop: 30,
+      marginBottom: 23,
+    },
 
-  // =========================================================
-  // ERROR
-  // =========================================================
+    iconBox: {
+      width: 50,
+      height: 50,
+      borderRadius: 15,
+      backgroundColor:
+        colors.accentLight,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: 14,
+    },
 
-  errorRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 10,
-  },
+    title: {
+      fontFamily:
+        'InterBold',
+      fontSize: 25,
+      lineHeight: 30,
+      color: colors.text,
+      letterSpacing: -0.4,
+    },
 
-  errorText: {
-    fontFamily: 'InterRegular',
-    fontSize: 10,
-    color: colors.danger,
-    marginLeft: 5,
-    flex: 1,
-  },
+    description: {
+      fontFamily:
+        'InterRegular',
+      fontSize: 13,
+      color:
+        colors.textMuted,
+      marginTop: 6,
+    },
 
-  // =========================================================
-  // VERIFY
-  // =========================================================
+    mobile: {
+      fontFamily:
+        'InterSemiBold',
+      fontSize: 13,
+      color: colors.text,
+      marginTop: 3,
+    },
 
-  verifyButton: {
-    height: spacing.buttonHeight,
-    borderRadius: 15,
-    backgroundColor: colors.accent,
-    paddingLeft: 18,
-    paddingRight: 7,
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 19,
-  },
+    // =======================================================
+    // CARD
+    // =======================================================
 
-  verifyButtonDisabled: {
-    backgroundColor: colors.borderLight,
-  },
+    card: {
+      backgroundColor:
+        colors.white,
+      borderRadius:
+        spacing.radiusLarge,
+      padding:
+        spacing.cardPadding,
+      borderWidth: 1,
+      borderColor:
+        colors.borderLight,
 
-  verifyText: {
-    flex: 1,
-    fontFamily: 'InterBold',
-    fontSize: 12,
-    color: colors.white,
-  },
+      shadowColor:
+        colors.shadow,
 
-  verifyTextDisabled: {
-    color: colors.textLight,
-  },
+      shadowOffset: {
+        width: 0,
+        height: 7,
+      },
 
-  arrowBox: {
-    width: 39,
-    height: 39,
-    borderRadius: 11,
-    backgroundColor: colors.accentDark,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
+      shadowOpacity: 0.07,
+      shadowRadius: 16,
+      elevation: 3,
+    },
 
-  arrowBoxDisabled: {
-    backgroundColor: colors.border,
-  },
+    label: {
+      fontFamily:
+        'InterSemiBold',
+      fontSize: 12,
+      color: colors.text,
+      marginBottom: 10,
+    },
 
-  // =========================================================
-  // RESEND
-  // =========================================================
+    // =======================================================
+    // OTP
+    // =======================================================
 
-  resendContainer: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    marginTop: 18,
-  },
+    otpContainer: {
+      flexDirection: 'row',
+      justifyContent:
+        'space-between',
+      position: 'relative',
+    },
 
-  resendLabel: {
-    fontFamily: 'InterRegular',
-    fontSize: 10,
-    color: colors.textMuted,
-  },
+    otpInput: {
+      position: 'absolute',
+      width: 1,
+      height: 1,
+      opacity: 0,
+    },
 
-  timerText: {
-    fontFamily: 'InterSemiBold',
-    fontSize: 10,
-    color: colors.textLight,
-    marginLeft: 4,
-  },
+    otpBox: {
+      width: 43,
+      height: 54,
+      borderRadius:
+        spacing.radiusMedium,
+      borderWidth: 1,
+      borderColor:
+        colors.border,
+      backgroundColor:
+        colors.background,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
 
-  resendText: {
-    fontFamily: 'InterSemiBold',
-    fontSize: 10,
-    color: colors.accent,
-    marginLeft: 4,
-  },
+    otpBoxActive: {
+      borderColor:
+        colors.accent,
+      backgroundColor:
+        colors.accentLight,
+    },
 
-  // =========================================================
-  // SECURITY
-  // =========================================================
+    otpBoxError: {
+      borderColor:
+        colors.danger,
+    },
 
-  securityCard: {
-    marginTop: 17,
-    backgroundColor: colors.successLight,
-    borderRadius: spacing.radiusMedium,
-    padding: 13,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
+    otpDigit: {
+      fontFamily:
+        'InterBold',
+      fontSize: 20,
+      color: colors.text,
+    },
 
-  securityIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    backgroundColor: colors.white,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginRight: 10,
-  },
+    // =======================================================
+    // ERROR
+    // =======================================================
 
-  securityContent: {
-    flex: 1,
-  },
+    errorRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginTop: 10,
+    },
 
-  securityTitle: {
-    fontFamily: 'InterSemiBold',
-    fontSize: 11,
-    color: colors.text,
-  },
+    errorText: {
+      fontFamily:
+        'InterRegular',
+      fontSize: 10,
+      color:
+        colors.danger,
+      marginLeft: 5,
+      flex: 1,
+    },
 
-  securityText: {
-    fontFamily: 'InterRegular',
-    fontSize: 10,
-    lineHeight: 14,
-    color: colors.textSecondary,
-    marginTop: 2,
-  },
+    // =======================================================
+    // VERIFY
+    // =======================================================
 
-  // =========================================================
-  // FOOTER
-  // =========================================================
+    verifyButton: {
+      height:
+        spacing.buttonHeight,
+      borderRadius: 15,
+      backgroundColor:
+        colors.accent,
+      paddingLeft: 18,
+      paddingRight: 7,
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginTop: 19,
+    },
 
-  footer: {
-    fontFamily: 'InterRegular',
-    fontSize: 10,
-    color: colors.textLight,
-    textAlign: 'center',
-    marginTop: 22,
-  },
+    verifyButtonDisabled: {
+      backgroundColor:
+        colors.borderLight,
+    },
 
-});
+    verifyText: {
+      flex: 1,
+      fontFamily:
+        'InterBold',
+      fontSize: 12,
+      color: colors.white,
+    },
+
+    verifyTextDisabled: {
+      color:
+        colors.textLight,
+    },
+
+    arrowBox: {
+      width: 39,
+      height: 39,
+      borderRadius: 11,
+      backgroundColor:
+        colors.accentDark,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+
+    arrowBoxDisabled: {
+      backgroundColor:
+        colors.border,
+    },
+
+    // =======================================================
+    // RESEND
+    // =======================================================
+
+    resendContainer: {
+      flexDirection: 'row',
+      justifyContent: 'center',
+      marginTop: 18,
+    },
+
+    resendLabel: {
+      fontFamily:
+        'InterRegular',
+      fontSize: 10,
+      color:
+        colors.textMuted,
+    },
+
+    timerText: {
+      fontFamily:
+        'InterSemiBold',
+      fontSize: 10,
+      color:
+        colors.textLight,
+      marginLeft: 4,
+    },
+
+    resendText: {
+      fontFamily:
+        'InterSemiBold',
+      fontSize: 10,
+      color:
+        colors.accent,
+      marginLeft: 4,
+    },
+
+    // =======================================================
+    // SECURITY
+    // =======================================================
+
+    securityCard: {
+      marginTop: 17,
+      backgroundColor:
+        colors.successLight,
+      borderRadius:
+        spacing.radiusMedium,
+      padding: 13,
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+
+    securityIcon: {
+      width: 40,
+      height: 40,
+      borderRadius: 12,
+      backgroundColor:
+        colors.white,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginRight: 10,
+    },
+
+    securityContent: {
+      flex: 1,
+    },
+
+    securityTitle: {
+      fontFamily:
+        'InterSemiBold',
+      fontSize: 11,
+      color: colors.text,
+    },
+
+    securityText: {
+      fontFamily:
+        'InterRegular',
+      fontSize: 10,
+      lineHeight: 14,
+      color:
+        colors.textSecondary,
+      marginTop: 2,
+    },
+
+    // =======================================================
+    // FOOTER
+    // =======================================================
+
+    footer: {
+      fontFamily:
+        'InterRegular',
+      fontSize: 10,
+      color:
+        colors.textLight,
+      textAlign: 'center',
+      marginTop: 22,
+    },
+
+  });

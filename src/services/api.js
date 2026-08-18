@@ -1,22 +1,19 @@
-import API_BASE_URL from '../config/api';
 import { getToken } from '../utils/authStorage';
+
+const API_BASE_URL =
+  'http://192.168.1.15:8080';
 
 export async function apiRequest(
   endpoint,
   options = {}
 ) {
-  const {
-    method = 'GET',
-    body,
-    token: providedToken,
-  } = options;
-
   const token =
-    providedToken || await getToken();
+    await getToken();
 
   const headers = {
     Accept: 'application/json',
     'Content-Type': 'application/json',
+    ...(options.headers || {}),
   };
 
   if (token) {
@@ -24,37 +21,35 @@ export async function apiRequest(
       `Bearer ${token}`;
   }
 
-  const url =
-    `${API_BASE_URL}${endpoint}`;
-
   console.log(
-    `[Truck Assist API] ${method} ${url}`
+    '[Truck Assist API]',
+    options.method || 'GET',
+    `${API_BASE_URL}${endpoint}`
   );
 
-  let response;
+  console.log(
+    '[Truck Assist API] Auth token:',
+    token
+      ? 'PRESENT'
+      : 'MISSING'
+  );
 
-  try {
-    response = await fetch(
-      url,
+  const response =
+    await fetch(
+      `${API_BASE_URL}${endpoint}`,
       {
-        method,
+        ...options,
         headers,
+
         body:
-          body !== undefined
-            ? JSON.stringify(body)
-            : undefined,
+          options.body &&
+          typeof options.body !== 'string'
+            ? JSON.stringify(
+                options.body
+              )
+            : options.body,
       }
     );
-  } catch (error) {
-    console.error(
-      '[Truck Assist API] Network error:',
-      error
-    );
-
-    throw new Error(
-      'Unable to connect to Truck Assist server.'
-    );
-  }
 
   const contentType =
     response.headers.get(
@@ -68,20 +63,21 @@ export async function apiRequest(
       'application/json'
     )
   ) {
-    data = await response.json();
+    data =
+      await response.json();
   } else {
     const text =
       await response.text();
 
-    data = text
-      ? { message: text }
-      : null;
+    data =
+      text || null;
   }
 
   if (!response.ok) {
     const message =
       data?.message ||
       data?.error ||
+      data ||
       `Request failed with status ${response.status}`;
 
     const error =
@@ -90,8 +86,7 @@ export async function apiRequest(
     error.status =
       response.status;
 
-    error.data =
-      data;
+    error.data = data;
 
     throw error;
   }

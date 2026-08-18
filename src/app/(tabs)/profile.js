@@ -10,11 +10,10 @@ import {
   RefreshControl,
   ScrollView,
   StyleSheet,
-  Switch,
   Text,
   TextInput,
   TouchableOpacity,
-  View,
+  View
 } from 'react-native';
 
 import colors from '../../constants/colors';
@@ -22,35 +21,26 @@ import spacing from '../../constants/spacing';
 
 import {
   getMyDriverProfile,
-  updateDriverAvailability,
   updateMyDriverProfile,
 } from '../../services/driverService';
 
 import { useAuth } from '../../context/AuthContext';
 
+// =========================================================
+// PROFILE SCREEN
+// =========================================================
+
 export default function ProfileScreen() {
-
   const router = useRouter();
-
   const { logout } = useAuth();
 
-  const [profile, setProfile] =
-    useState(null);
-
-  const [loading, setLoading] =
-    useState(true);
-
-  const [refreshing, setRefreshing] =
-    useState(false);
-
-  const [editing, setEditing] =
-    useState(false);
-
-  const [saving, setSaving] =
-    useState(false);
-
-  const [availabilityLoading, setAvailabilityLoading] =
-    useState(false);
+  const [profile, setProfile] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [photoLoading, setPhotoLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState('');
 
   const [form, setForm] = useState({
     name: '',
@@ -66,74 +56,33 @@ export default function ProfileScreen() {
   // LOAD PROFILE
   // =========================================================
 
-  const loadProfile = async (
-    showLoader = true
-  ) => {
-
+  const loadProfile = async (showLoader = true) => {
     try {
-
       if (showLoader) {
         setLoading(true);
       }
 
-      const response =
-        await getMyDriverProfile();
+      setErrorMessage('');
 
-      console.log(
-        '[Driver Profile]',
-        response
-      );
+      const response = await getMyDriverProfile();
 
       setProfile(response);
-
-      setForm({
-        name:
-          response?.name || '',
-
-        email:
-          response?.email || '',
-
-        profileImageUrl:
-          response?.profileImageUrl || '',
-
-        licenseNumber:
-          response?.licenseNumber || '',
-
-        licenseExpiryDate:
-          formatDateForInput(
-            response?.licenseExpiryDate
-          ),
-
-        emergencyContactName:
-          response?.emergencyContactName || '',
-
-        emergencyContactPhone:
-          response?.emergencyContactPhone || '',
-      });
-
+      setForm(profileToForm(response));
     } catch (error) {
-
       console.error(
         'Unable to load driver profile:',
         error
       );
 
-      Alert.alert(
-        'Unable to Load Profile',
+      setErrorMessage(
         error?.message ||
-          'Something went wrong while loading your profile.'
+          'Unable to load your driver profile.'
       );
-
     } finally {
-
       setLoading(false);
       setRefreshing(false);
     }
   };
-
-  // =========================================================
-  // INITIAL LOAD
-  // =========================================================
 
   useEffect(() => {
     loadProfile();
@@ -144,9 +93,7 @@ export default function ProfileScreen() {
   // =========================================================
 
   const handleRefresh = () => {
-
     setRefreshing(true);
-
     loadProfile(false);
   };
 
@@ -155,36 +102,12 @@ export default function ProfileScreen() {
   // =========================================================
 
   const handleEdit = () => {
-
     if (!profile) {
       return;
     }
 
-    setForm({
-      name:
-        profile.name || '',
-
-      email:
-        profile.email || '',
-
-      profileImageUrl:
-        profile.profileImageUrl || '',
-
-      licenseNumber:
-        profile.licenseNumber || '',
-
-      licenseExpiryDate:
-        formatDateForInput(
-          profile.licenseExpiryDate
-        ),
-
-      emergencyContactName:
-        profile.emergencyContactName || '',
-
-      emergencyContactPhone:
-        profile.emergencyContactPhone || '',
-    });
-
+    setErrorMessage('');
+    setForm(profileToForm(profile));
     setEditing(true);
   };
 
@@ -193,115 +116,86 @@ export default function ProfileScreen() {
   // =========================================================
 
   const handleCancel = () => {
-
     if (profile) {
-
-      setForm({
-        name:
-          profile.name || '',
-
-        email:
-          profile.email || '',
-
-        profileImageUrl:
-          profile.profileImageUrl || '',
-
-        licenseNumber:
-          profile.licenseNumber || '',
-
-        licenseExpiryDate:
-          formatDateForInput(
-            profile.licenseExpiryDate
-          ),
-
-        emergencyContactName:
-          profile.emergencyContactName || '',
-
-        emergencyContactPhone:
-          profile.emergencyContactPhone || '',
-      });
+      setForm(profileToForm(profile));
     }
 
+    setErrorMessage('');
     setEditing(false);
   };
 
   // =========================================================
-  // PICK PHOTO
+  // PICK PROFILE PHOTO
   // =========================================================
 
   const handlePickPhoto = async () => {
+    if (!editing || photoLoading || saving) {
+      return;
+    }
 
     try {
+      setPhotoLoading(true);
+      setErrorMessage('');
 
       const permission =
         await ImagePicker.requestMediaLibraryPermissionsAsync();
 
-      if (
-        !permission.granted
-      ) {
-
+      if (!permission.granted) {
         Alert.alert(
           'Permission Required',
           'Please allow photo library access to select a profile photo.'
         );
-
         return;
       }
 
       const result =
         await ImagePicker.launchImageLibraryAsync({
-
-          mediaTypes:
-            ['images'],
-
-          allowsEditing:
-            true,
-
-          aspect:
-            [1, 1],
-
-          quality:
-            0.8,
+          mediaTypes: ['images'],
+          allowsEditing: true,
+          aspect: [1, 1],
+          quality: 0.75,
+          base64: true,
         });
 
-      if (
-        result.canceled
-      ) {
+      if (result.canceled) {
         return;
       }
 
-      const uri =
-        result.assets?.[0]?.uri;
+      const asset = result.assets?.[0];
 
-      if (!uri) {
+      if (!asset?.uri) {
         return;
       }
 
-      /*
-       * For now we store the selected
-       * image URI.
-       *
-       * Later this can be replaced with
-       * cloud storage upload.
-       */
+      // Prefer a self-contained data URL so the selected
+      // photo remains usable after the temporary picker URI
+      // disappears. The backend already stores this value in
+      // profileImageUrl.
+      let imageValue = asset.uri;
+
+      if (asset.base64) {
+        const mimeType =
+          asset.mimeType || 'image/jpeg';
+
+        imageValue =
+          `data:${mimeType};base64,${asset.base64}`;
+      }
 
       setForm(previous => ({
         ...previous,
-        profileImageUrl:
-          uri,
+        profileImageUrl: imageValue,
       }));
-
     } catch (error) {
-
       console.error(
         'Photo selection failed:',
         error
       );
 
-      Alert.alert(
-        'Photo Error',
+      setErrorMessage(
         'Unable to select the profile photo.'
       );
+    } finally {
+      setPhotoLoading(false);
     }
   };
 
@@ -310,333 +204,162 @@ export default function ProfileScreen() {
   // =========================================================
 
   const handleSave = async () => {
-
     if (saving) {
       return;
     }
 
-    const name =
-      form.name.trim();
+    setErrorMessage('');
 
-    const email =
-      form.email.trim();
-
-    const licenseNumber =
-      form.licenseNumber.trim();
-
-    const expiryDate =
-      form.licenseExpiryDate.trim();
-
+    const name = form.name.trim();
+    const email = form.email.trim();
+    const licenseNumber = form.licenseNumber.trim();
+    const expiryDate = form.licenseExpiryDate.trim();
     const emergencyName =
       form.emergencyContactName.trim();
-
     const emergencyPhone =
       form.emergencyContactPhone.trim();
 
-    // -------------------------------------------------------
-    // NAME
-    // -------------------------------------------------------
-
     if (!name) {
-
-      Alert.alert(
-        'Name Required',
-        'Please enter your name.'
-      );
-
+      setErrorMessage('Please enter your name.');
       return;
     }
 
-    // -------------------------------------------------------
-    // EMAIL
-    // -------------------------------------------------------
-
     if (!email) {
-
-      Alert.alert(
-        'Email Required',
+      setErrorMessage(
         'Please enter your email address.'
       );
-
       return;
     }
 
     if (!isValidEmail(email)) {
-
-      Alert.alert(
-        'Invalid Email',
+      setErrorMessage(
         'Please enter a valid email address.'
       );
-
       return;
     }
 
-    // -------------------------------------------------------
-    // LICENSE
-    // -------------------------------------------------------
-
     if (!licenseNumber) {
-
-      Alert.alert(
-        'License Number Required',
+      setErrorMessage(
         'Please enter your driving license number.'
       );
-
       return;
     }
 
     if (!expiryDate) {
-
-      Alert.alert(
-        'License Expiry Required',
+      setErrorMessage(
         'Please enter the license expiry date.'
       );
-
       return;
     }
 
     if (!isValidDate(expiryDate)) {
-
-      Alert.alert(
-        'Invalid Date',
-        'Please use YYYY-MM-DD format.'
+      setErrorMessage(
+        'Please use YYYY-MM-DD for the license expiry date.'
       );
-
       return;
     }
 
-    // -------------------------------------------------------
-    // EMERGENCY CONTACT
-    // -------------------------------------------------------
-
     if (!emergencyName) {
-
-      Alert.alert(
-        'Emergency Contact Required',
+      setErrorMessage(
         'Please enter the emergency contact name.'
       );
-
       return;
     }
 
     if (!emergencyPhone) {
-
-      Alert.alert(
-        'Emergency Phone Required',
+      setErrorMessage(
         'Please enter the emergency contact number.'
       );
-
       return;
     }
 
     try {
-
       setSaving(true);
 
       const updated =
         await updateMyDriverProfile({
-
           name,
-
           email,
-
           profileImageUrl:
-            form.profileImageUrl ||
-            null,
-
+            form.profileImageUrl || null,
           licenseNumber,
-
-          licenseExpiryDate:
-            expiryDate,
-
-          emergencyContactName:
-            emergencyName,
-
-          emergencyContactPhone:
-            emergencyPhone,
+          licenseExpiryDate: expiryDate,
+          emergencyContactName: emergencyName,
+          emergencyContactPhone: emergencyPhone,
         });
 
-      console.log(
-        '[Driver Profile Updated]',
-        updated
-      );
-
       setProfile(updated);
-
-      setForm({
-        name:
-          updated?.name || '',
-
-        email:
-          updated?.email || '',
-
-        profileImageUrl:
-          updated?.profileImageUrl || '',
-
-        licenseNumber:
-          updated?.licenseNumber || '',
-
-        licenseExpiryDate:
-          formatDateForInput(
-            updated?.licenseExpiryDate
-          ),
-
-        emergencyContactName:
-          updated?.emergencyContactName || '',
-
-        emergencyContactPhone:
-          updated?.emergencyContactPhone || '',
-      });
-
+      setForm(profileToForm(updated));
       setEditing(false);
 
       Alert.alert(
         'Profile Updated',
         'Your profile has been updated successfully.'
       );
-
     } catch (error) {
-
       console.error(
         'Unable to update driver profile:',
         error
       );
 
-      Alert.alert(
-        'Update Failed',
+      setErrorMessage(
         error?.message ||
           'Unable to update your profile.'
       );
-
     } finally {
-
       setSaving(false);
     }
   };
 
-  // =========================================================
-  // AVAILABILITY
-  // =========================================================
+ // =========================================================
+// LOGOUT
+// =========================================================
 
-  const handleAvailabilityChange =
-    async (value) => {
+const handleLogout = async () => {
+  console.log(
+    '[Profile] Logout button pressed'
+  );
 
-      if (
-        !profile ||
-        availabilityLoading
-      ) {
-        return;
-      }
+  try {
+    // Clear authentication session
+    await logout();
 
-      try {
-
-        setAvailabilityLoading(
-          true
-        );
-
-        const updated =
-          await updateDriverAvailability(
-            value
-          );
-
-        setProfile(updated);
-
-      } catch (error) {
-
-        console.error(
-          'Unable to update availability:',
-          error
-        );
-
-        Alert.alert(
-          'Availability Update Failed',
-          error?.message ||
-            'Unable to update your availability.'
-        );
-
-      } finally {
-
-        setAvailabilityLoading(
-          false
-        );
-      }
-    };
-
-  // =========================================================
-  // LOGOUT
-  // =========================================================
-
-  const handleLogout = () => {
-
-    Alert.alert(
-      'Logout',
-      'Are you sure you want to logout?',
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-        },
-
-        {
-          text: 'Logout',
-          style: 'destructive',
-
-          onPress: async () => {
-
-            try {
-
-              await logout();
-
-              router.replace(
-                '/login'
-              );
-
-            } catch (error) {
-
-              console.error(
-                'Logout failed:',
-                error
-              );
-
-              Alert.alert(
-                'Logout Failed',
-                'Unable to logout. Please try again.'
-              );
-            }
-          },
-        },
-      ]
+    console.log(
+      '[Profile] Logout successful'
     );
-  };
+
+  } catch (error) {
+
+    console.error(
+      '[Profile] Logout failed:',
+      error
+    );
+
+  } finally {
+
+    // Always go to login screen
+    router.replace({
+      pathname: '/login',
+    });
+
+  }
+};
 
   // =========================================================
   // LOADING
   // =========================================================
 
   if (loading) {
-
     return (
-      <View
-        style={
-          styles.loadingContainer
-        }
-      >
-
+      <View style={styles.loadingContainer}>
         <ActivityIndicator
           size="large"
-          color={
-            colors.accent
-          }
+          color={colors.accent}
         />
 
-        <Text
-          style={
-            styles.loadingText
-          }
-        >
+        <Text style={styles.loadingText}>
           Loading profile...
         </Text>
-
       </View>
     );
   }
@@ -646,337 +369,216 @@ export default function ProfileScreen() {
   // =========================================================
 
   if (!profile) {
-
     return (
-      <View
-        style={
-          styles.emptyContainer
-        }
-      >
-
-        <View
-          style={
-            styles.emptyIcon
-          }
-        >
+      <View style={styles.emptyContainer}>
+        <View style={styles.emptyIcon}>
           <Ionicons
             name="person-outline"
             size={30}
-            color={
-              colors.accent
-            }
+            color={colors.accent}
           />
         </View>
 
-        <Text
-          style={
-            styles.emptyTitle
-          }
-        >
+        <Text style={styles.emptyTitle}>
           Profile unavailable
         </Text>
 
-        <Text
-          style={
-            styles.emptyDescription
-          }
-        >
-          We couldn't load your driver
-          profile.
+        <Text style={styles.emptyDescription}>
+          We couldn't load your driver profile.
         </Text>
 
         <TouchableOpacity
-          style={
-            styles.retryButton
-          }
-          onPress={() =>
-            loadProfile()
-          }
+          style={styles.retryButton}
+          onPress={() => loadProfile()}
+          activeOpacity={0.8}
         >
-          <Text
-            style={
-              styles.retryText
-            }
-          >
+          <Text style={styles.retryText}>
             Try Again
           </Text>
         </TouchableOpacity>
-
       </View>
     );
   }
 
   const displayName =
-    profile.name ||
-    'Driver';
+    profile.name || 'Driver';
 
-  const initials =
-    getInitials(
-      displayName
-    );
+  const initials = getInitials(displayName);
 
-  const isAvailable =
-    Boolean(
-      profile.available
-    );
-
-  const displayPhoto =
-    editing
-      ? form.profileImageUrl
-      : profile.profileImageUrl;
-
-  // =========================================================
-  // SCREEN
-  // =========================================================
+  const displayPhoto = editing
+    ? form.profileImageUrl
+    : profile.profileImageUrl;
 
   return (
-    <View
-      style={
-        styles.container
-      }
-    >
-
+    <View style={styles.container}>
       <ScrollView
-        showsVerticalScrollIndicator={
-          false
-        }
-        contentContainerStyle={
-          styles.content
-        }
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.content}
         refreshControl={
           <RefreshControl
-            refreshing={
-              refreshing
-            }
-            onRefresh={
-              handleRefresh
-            }
-            tintColor={
-              colors.accent
-            }
+            refreshing={refreshing}
+            onRefresh={handleRefresh}
+            tintColor={colors.accent}
           />
         }
       >
-
         {/* =================================================
             HEADER
         ================================================= */}
 
-        <View
-          style={
-            styles.header
-          }
-        >
-
-          <View>
-
-            <Text
-              style={
-                styles.title
-              }
-            >
+        <View style={styles.header}>
+          <View style={styles.headerTextContainer}>
+            <Text style={styles.title}>
               Profile
             </Text>
 
-            <Text
-              style={
-                styles.subtitle
-              }
-            >
-              Driver profile and settings
+            <Text style={styles.subtitle}>
+              Manage your driver profile
             </Text>
-
           </View>
 
           {!editing && (
-
             <TouchableOpacity
-              style={
-                styles.editHeaderButton
-              }
-              onPress={
-                handleEdit
-              }
+              style={styles.editHeaderButton}
+              onPress={handleEdit}
               activeOpacity={0.8}
             >
-
               <Ionicons
                 name="create-outline"
                 size={19}
-                color={
-                  colors.accent
-                }
+                color={colors.accent}
               />
 
+              <Text style={styles.editHeaderText}>
+                Edit
+              </Text>
             </TouchableOpacity>
           )}
-
         </View>
 
         {/* =================================================
-            PROFILE HEADER
+            ERROR
         ================================================= */}
 
-        <View
-          style={
-            styles.profileCard
-          }
-        >
+        {errorMessage ? (
+          <View style={styles.errorBanner}>
+            <Ionicons
+              name="alert-circle-outline"
+              size={18}
+              color={colors.danger}
+            />
 
+            <Text style={styles.errorText}>
+              {errorMessage}
+            </Text>
+
+            <TouchableOpacity
+              onPress={() => setErrorMessage('')}
+            >
+              <Ionicons
+                name="close"
+                size={18}
+                color={colors.danger}
+              />
+            </TouchableOpacity>
+          </View>
+        ) : null}
+
+        {/* =================================================
+            PROFILE SUMMARY
+        ================================================= */}
+
+        <View style={styles.profileCard}>
           <TouchableOpacity
             onPress={
               editing
                 ? handlePickPhoto
                 : undefined
             }
-            activeOpacity={
-              editing ? 0.8 : 1
-            }
+            activeOpacity={editing ? 0.8 : 1}
+            disabled={photoLoading || saving}
           >
-
-            <View
-              style={
-                styles.avatarContainer
-              }
-            >
-
+            <View style={styles.avatarContainer}>
               {displayPhoto ? (
-
                 <Image
-                  source={{
-                    uri:
-                      displayPhoto,
-                  }}
-                  style={
-                    styles.avatarImage
-                  }
+                  source={{ uri: displayPhoto }}
+                  style={styles.avatarImage}
                 />
-
               ) : (
-
-                <View
-                  style={
-                    styles.avatar
-                  }
-                >
-
-                  <Text
-                    style={
-                      styles.avatarText
-                    }
-                  >
+                <View style={styles.avatarFallback}>
+                  <Text style={styles.avatarText}>
                     {initials}
                   </Text>
-
                 </View>
               )}
 
               {editing && (
-
-                <View
-                  style={
-                    styles.cameraButton
-                  }
-                >
-                  <Ionicons
-                    name="camera"
-                    size={13}
-                    color={
-                      colors.white
-                    }
-                  />
+                <View style={styles.cameraButton}>
+                  {photoLoading ? (
+                    <ActivityIndicator
+                      size="small"
+                      color={colors.white}
+                    />
+                  ) : (
+                    <Ionicons
+                      name="camera-outline"
+                      size={14}
+                      color={colors.white}
+                    />
+                  )}
                 </View>
               )}
-
             </View>
-
           </TouchableOpacity>
 
-          <View
-            style={
-              styles.profileInfo
-            }
-          >
-
-            <Text
-              style={
-                styles.name
-              }
-            >
+          <View style={styles.profileInfo}>
+            <Text style={styles.name}>
               {displayName}
             </Text>
 
-            <Text
-              style={
-                styles.phone
-              }
-            >
+            <Text style={styles.phone}>
               {profile.phone ||
                 'Mobile number not available'}
             </Text>
 
-            <View
-              style={
-                styles.verifiedRow
-              }
-            >
-
+            <View style={styles.verifiedRow}>
               <Ionicons
                 name="checkmark-circle"
-                size={13}
-                color={
-                  colors.success
-                }
+                size={14}
+                color={colors.success}
               />
 
-              <Text
-                style={
-                  styles.verifiedText
-                }
-              >
+              <Text style={styles.verifiedText}>
                 Verified Driver
               </Text>
-
             </View>
-
           </View>
-
         </View>
+
+        {editing && (
+          <Text style={styles.photoHint}>
+            Tap the camera icon to change your profile photo.
+          </Text>
+        )}
 
         {/* =================================================
             PERSONAL INFORMATION
         ================================================= */}
 
-        <Text
-          style={
-            styles.sectionTitle
-          }
-        >
-          Personal Information
-        </Text>
+        <SectionTitle title="Personal Information" />
 
-        <View
-          style={
-            styles.card
-          }
-        >
-
+        <View style={styles.card}>
           {editing ? (
-
             <>
               <InputField
                 icon="person-outline"
                 label="Full Name"
-                value={
-                  form.name
-                }
-                onChangeText={
-                  value =>
-                    setForm({
-                      ...form,
-                      name:
-                        value,
-                    })
+                value={form.name}
+                onChangeText={value =>
+                  setForm(previous => ({
+                    ...previous,
+                    name: value,
+                  }))
                 }
                 placeholder="Enter your name"
               />
@@ -993,16 +595,12 @@ export default function ProfileScreen() {
               <InputField
                 icon="mail-outline"
                 label="Email Address"
-                value={
-                  form.email
-                }
-                onChangeText={
-                  value =>
-                    setForm({
-                      ...form,
-                      email:
-                        value,
-                    })
+                value={form.email}
+                onChangeText={value =>
+                  setForm(previous => ({
+                    ...previous,
+                    email: value,
+                  }))
                 }
                 placeholder="Enter email address"
                 keyboardType="email-address"
@@ -1010,9 +608,7 @@ export default function ProfileScreen() {
                 isLast
               />
             </>
-
           ) : (
-
             <>
               <InfoRow
                 icon="person-outline"
@@ -1043,43 +639,26 @@ export default function ProfileScreen() {
               />
             </>
           )}
-
         </View>
 
         {/* =================================================
-            LICENSE
+            DRIVING LICENSE
         ================================================= */}
 
-        <Text
-          style={
-            styles.sectionTitle
-          }
-        >
-          Driving License
-        </Text>
+        <SectionTitle title="Driving License" />
 
-        <View
-          style={
-            styles.card
-          }
-        >
-
+        <View style={styles.card}>
           {editing ? (
-
             <>
               <InputField
                 icon="card-outline"
                 label="License Number"
-                value={
-                  form.licenseNumber
-                }
-                onChangeText={
-                  value =>
-                    setForm({
-                      ...form,
-                      licenseNumber:
-                        value,
-                    })
+                value={form.licenseNumber}
+                onChangeText={value =>
+                  setForm(previous => ({
+                    ...previous,
+                    licenseNumber: value,
+                  }))
                 }
                 placeholder="Enter license number"
                 autoCapitalize="characters"
@@ -1088,25 +667,19 @@ export default function ProfileScreen() {
               <InputField
                 icon="calendar-outline"
                 label="License Expiry"
-                value={
-                  form.licenseExpiryDate
-                }
-                onChangeText={
-                  value =>
-                    setForm({
-                      ...form,
-                      licenseExpiryDate:
-                        value,
-                    })
+                value={form.licenseExpiryDate}
+                onChangeText={value =>
+                  setForm(previous => ({
+                    ...previous,
+                    licenseExpiryDate: value,
+                  }))
                 }
                 placeholder="YYYY-MM-DD"
                 keyboardType="numbers-and-punctuation"
                 isLast
               />
             </>
-
           ) : (
-
             <>
               <InfoRow
                 icon="card-outline"
@@ -1120,52 +693,33 @@ export default function ProfileScreen() {
               <InfoRow
                 icon="calendar-outline"
                 label="Expiry Date"
-                value={
-                  formatDisplayDate(
-                    profile.licenseExpiryDate
-                  )
-                }
+                value={formatDisplayDate(
+                  profile.licenseExpiryDate
+                )}
                 isLast
               />
             </>
           )}
-
         </View>
 
         {/* =================================================
             EMERGENCY CONTACT
         ================================================= */}
 
-        <Text
-          style={
-            styles.sectionTitle
-          }
-        >
-          Emergency Contact
-        </Text>
+        <SectionTitle title="Emergency Contact" />
 
-        <View
-          style={
-            styles.card
-          }
-        >
-
+        <View style={styles.card}>
           {editing ? (
-
             <>
               <InputField
                 icon="person-circle-outline"
                 label="Contact Name"
-                value={
-                  form.emergencyContactName
-                }
-                onChangeText={
-                  value =>
-                    setForm({
-                      ...form,
-                      emergencyContactName:
-                        value,
-                    })
+                value={form.emergencyContactName}
+                onChangeText={value =>
+                  setForm(previous => ({
+                    ...previous,
+                    emergencyContactName: value,
+                  }))
                 }
                 placeholder="Enter contact name"
               />
@@ -1173,25 +727,19 @@ export default function ProfileScreen() {
               <InputField
                 icon="call-outline"
                 label="Contact Phone"
-                value={
-                  form.emergencyContactPhone
-                }
-                onChangeText={
-                  value =>
-                    setForm({
-                      ...form,
-                      emergencyContactPhone:
-                        value,
-                    })
+                value={form.emergencyContactPhone}
+                onChangeText={value =>
+                  setForm(previous => ({
+                    ...previous,
+                    emergencyContactPhone: value,
+                  }))
                 }
                 placeholder="Enter phone number"
                 keyboardType="phone-pad"
                 isLast
               />
             </>
-
           ) : (
-
             <>
               <InfoRow
                 icon="person-circle-outline"
@@ -1213,110 +761,6 @@ export default function ProfileScreen() {
               />
             </>
           )}
-
-        </View>
-
-        {/* =================================================
-            AVAILABILITY
-        ================================================= */}
-
-        <Text
-          style={
-            styles.sectionTitle
-          }
-        >
-          Availability
-        </Text>
-
-        <View
-          style={
-            styles.availabilityCard
-          }>
-
-          <View
-            style={[
-              styles.availabilityIcon,
-              isAvailable &&
-                styles.availabilityIconActive,
-            ]}
-          >
-
-            <Ionicons
-              name={
-                isAvailable
-                  ? 'radio-outline'
-                  : 'pause-outline'
-              }
-              size={20}
-              color={
-                isAvailable
-                  ? colors.success
-                  : colors.textMuted
-              }
-            />
-
-          </View>
-
-          <View
-            style={
-              styles.availabilityInfo
-            }
-          >
-
-            <Text
-              style={
-                styles.availabilityTitle
-              }
-            >
-              {isAvailable
-                ? 'You are available'
-                : 'You are offline'}
-            </Text>
-
-            <Text
-              style={
-                styles.availabilitySubtitle
-              }
-            >
-              {isAvailable
-                ? 'You can receive service requests'
-                : 'You will not receive new requests'}
-            </Text>
-
-          </View>
-
-          {availabilityLoading ? (
-
-            <ActivityIndicator
-              size="small"
-              color={
-                colors.accent
-              }
-            />
-
-          ) : (
-
-            <Switch
-              value={
-                isAvailable
-              }
-              onValueChange={
-                handleAvailabilityChange
-              }
-              trackColor={{
-                false:
-                  colors.border,
-                true:
-                  colors.accentLight,
-              }}
-              thumbColor={
-                isAvailable
-                  ? colors.accent
-                  : colors.textMuted
-              }
-            />
-          )}
-
         </View>
 
         {/* =================================================
@@ -1324,81 +768,43 @@ export default function ProfileScreen() {
         ================================================= */}
 
         {editing && (
-
-          <View
-            style={
-              styles.actionRow
-            }
-          >
-
+          <View style={styles.actionRow}>
             <TouchableOpacity
-              style={
-                styles.cancelButton
-              }
-              onPress={
-                handleCancel
-              }
-              disabled={
-                saving
-              }
+              style={styles.cancelButton}
+              onPress={handleCancel}
+              disabled={saving || photoLoading}
               activeOpacity={0.8}
             >
-
-              <Text
-                style={
-                  styles.cancelText
-                }
-              >
+              <Text style={styles.cancelText}>
                 Cancel
               </Text>
-
             </TouchableOpacity>
 
             <TouchableOpacity
-              style={
-                styles.saveButton
-              }
-              onPress={
-                handleSave
-              }
-              disabled={
-                saving
-              }
+              style={styles.saveButton}
+              onPress={handleSave}
+              disabled={saving || photoLoading}
               activeOpacity={0.8}
             >
-
               {saving ? (
-
                 <ActivityIndicator
                   size="small"
-                  color={
-                    colors.white
-                  }
+                  color={colors.white}
                 />
-
               ) : (
-
                 <>
                   <Ionicons
-                    name="checkmark"
-                    size={17}
-                    color={
-                      colors.white
-                    }
+                    name="checkmark-outline"
+                    size={18}
+                    color={colors.white}
                   />
 
-                  <Text
-                    style={
-                      styles.saveText
-                    }
-                  >
+                  <Text style={styles.saveText}>
                     Save Changes
                   </Text>
                 </>
               )}
-
             </TouchableOpacity>
-
           </View>
         )}
 
@@ -1407,53 +813,46 @@ export default function ProfileScreen() {
         ================================================= */}
 
         {!editing && (
-
           <TouchableOpacity
-            style={
-              styles.logoutButton
-            }
-            onPress={
-              handleLogout
-            }
+            style={styles.logoutButton}
+            onPress={handleLogout}
             activeOpacity={0.8}
           >
-
             <Ionicons
               name="log-out-outline"
               size={18}
-              color={
-                colors.danger ||
-                '#DC2626'
-              }
+              color={colors.danger}
             />
 
-            <Text
-              style={
-                styles.logoutText
-              }
-            >
+            <Text style={styles.logoutText}>
               Logout
             </Text>
-
           </TouchableOpacity>
         )}
 
-        <Text
-          style={
-            styles.versionText
-          }
-        >
+        <Text style={styles.versionText}>
           Truck Assist Driver
         </Text>
-
       </ScrollView>
     </View>
   );
 }
 
-// ===========================================================
+// =========================================================
+// SECTION TITLE
+// =========================================================
+
+function SectionTitle({ title }) {
+  return (
+    <Text style={styles.sectionTitle}>
+      {title}
+    </Text>
+  );
+}
+
+// =========================================================
 // INFO ROW
-// ===========================================================
+// =========================================================
 
 function InfoRow({
   icon,
@@ -1461,64 +860,40 @@ function InfoRow({
   value,
   isLast = false,
 }) {
-
   return (
     <View
       style={[
         styles.infoRow,
-        !isLast &&
-          styles.infoRowBorder,
+        !isLast && styles.infoRowBorder,
       ]}
     >
-
-      <View
-        style={
-          styles.infoIcon
-        }
-      >
-
+      <View style={styles.infoIcon}>
         <Ionicons
           name={icon}
           size={17}
-          color={
-            colors.accent
-          }
+          color={colors.accent}
         />
-
       </View>
 
-      <View
-        style={
-          styles.infoContent
-        }
-      >
-
-        <Text
-          style={
-            styles.infoLabel
-          }
-        >
+      <View style={styles.infoContent}>
+        <Text style={styles.infoLabel}>
           {label}
         </Text>
 
         <Text
-          style={
-            styles.infoValue
-          }
+          style={styles.infoValue}
           numberOfLines={2}
         >
           {value}
         </Text>
-
       </View>
-
     </View>
   );
 }
 
-// ===========================================================
+// =========================================================
 // INPUT FIELD
-// ===========================================================
+// =========================================================
 
 function InputField({
   icon,
@@ -1530,101 +905,79 @@ function InputField({
   autoCapitalize = 'sentences',
   isLast = false,
 }) {
-
   return (
     <View
       style={[
         styles.inputField,
-        !isLast &&
-          styles.inputFieldBorder,
+        !isLast && styles.inputFieldBorder,
       ]}
     >
-
-      <View
-        style={
-          styles.inputIcon
-        }
-      >
-
+      <View style={styles.inputIcon}>
         <Ionicons
           name={icon}
           size={17}
-          color={
-            colors.accent
-          }
+          color={colors.accent}
         />
-
       </View>
 
-      <View
-        style={
-          styles.inputContent
-        }
-      >
-
-        <Text
-          style={
-            styles.inputLabel
-          }
-        >
+      <View style={styles.inputContent}>
+        <Text style={styles.inputLabel}>
           {label}
         </Text>
 
         <TextInput
-          style={
-            styles.textInput
-          }
-          value={
-            value
-          }
-          onChangeText={
-            onChangeText
-          }
-          placeholder={
-            placeholder
-          }
-          placeholderTextColor={
-            colors.textLight
-          }
-          keyboardType={
-            keyboardType
-          }
-          autoCapitalize={
-            autoCapitalize
-          }
+          style={styles.textInput}
+          value={value}
+          onChangeText={onChangeText}
+          placeholder={placeholder}
+          placeholderTextColor={colors.textLight}
+          keyboardType={keyboardType}
+          autoCapitalize={autoCapitalize}
+          editable
         />
-
       </View>
-
     </View>
   );
 }
 
-// ===========================================================
+// =========================================================
+// PROFILE TO FORM
+// =========================================================
+
+function profileToForm(profile) {
+  return {
+    name: profile?.name || '',
+    email: profile?.email || '',
+    profileImageUrl:
+      profile?.profileImageUrl || '',
+    licenseNumber:
+      profile?.licenseNumber || '',
+    licenseExpiryDate:
+      formatDateForInput(
+        profile?.licenseExpiryDate
+      ),
+    emergencyContactName:
+      profile?.emergencyContactName || '',
+    emergencyContactPhone:
+      profile?.emergencyContactPhone || '',
+  };
+}
+
+// =========================================================
 // INITIALS
-// ===========================================================
+// =========================================================
 
-function getInitials(
-  name
-) {
-
-  if (
-    !name ||
-    name === 'Driver'
-  ) {
+function getInitials(name) {
+  if (!name || name === 'Driver') {
     return 'D';
   }
 
-  const parts =
-    name
-      .trim()
-      .split(/\s+/)
-      .filter(Boolean);
+  const parts = name
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
 
-  if (
-    parts.length === 1
-  ) {
-
+  if (parts.length === 1) {
     return parts[0]
       .substring(0, 2)
       .toUpperCase();
@@ -1632,81 +985,56 @@ function getInitials(
 
   return (
     parts[0][0] +
-    parts[
-      parts.length - 1
-    ][0]
+    parts[parts.length - 1][0]
   ).toUpperCase();
 }
 
-// ===========================================================
+// =========================================================
 // DATE INPUT
-// ===========================================================
+// =========================================================
 
-function formatDateForInput(
-  date
-) {
-
+function formatDateForInput(date) {
   if (!date) {
     return '';
   }
 
-  return String(date)
-    .substring(0, 10);
+  return String(date).substring(0, 10);
 }
 
-// ===========================================================
+// =========================================================
 // DATE DISPLAY
-// ===========================================================
+// =========================================================
 
-function formatDisplayDate(
-  date
-) {
-
+function formatDisplayDate(date) {
   if (!date) {
     return 'Not provided';
   }
 
-  const value =
-    String(date)
-      .substring(0, 10);
+  const value = String(date).substring(0, 10);
+  const parts = value.split('-');
 
-  const parts =
-    value.split('-');
-
-  if (
-    parts.length !== 3
-  ) {
+  if (parts.length !== 3) {
     return value;
   }
 
   return `${parts[2]}/${parts[1]}/${parts[0]}`;
 }
 
-// ===========================================================
+// =========================================================
 // DATE VALIDATION
-// ===========================================================
+// =========================================================
 
-function isValidDate(
-  value
-) {
-
+function isValidDate(value) {
   const match =
-    /^(\d{4})-(\d{2})-(\d{2})$/.exec(
-      value
-    );
+    /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
 
   if (!match) {
     return false;
   }
 
-  const year =
-    Number(match[1]);
-
-  const month =
-    Number(match[2]);
-
-  const day =
-    Number(match[3]);
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
 
   if (
     month < 1 ||
@@ -1717,157 +1045,176 @@ function isValidDate(
     return false;
   }
 
-  const date =
-    new Date(
-      year,
-      month - 1,
-      day
-    );
+  const date = new Date(
+    year,
+    month - 1,
+    day
+  );
 
   return (
     date.getFullYear() === year &&
-    date.getMonth() ===
-      month - 1 &&
+    date.getMonth() === month - 1 &&
     date.getDate() === day
   );
 }
 
-// ===========================================================
+// =========================================================
 // EMAIL VALIDATION
-// ===========================================================
+// =========================================================
 
-function isValidEmail(
-  email
-) {
-
+function isValidEmail(email) {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(
     email
   );
 }
 
-// ===========================================================
+// =========================================================
 // STYLES
-// ===========================================================
+// =========================================================
 
 const styles = StyleSheet.create({
-
   container: {
     flex: 1,
-    backgroundColor:
-      colors.background,
+    backgroundColor: colors.background,
   },
 
   content: {
-    paddingHorizontal:
-      spacing.screenHorizontal,
+    paddingHorizontal: spacing.screenHorizontal,
     paddingTop: 18,
     paddingBottom: 110,
   },
 
-  // =========================================================
+  // =======================================================
   // HEADER
-  // =========================================================
+  // =======================================================
 
   header: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent:
-      'space-between',
-    marginBottom: 18,
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+
+  headerTextContainer: {
+    flex: 1,
+    paddingRight: 12,
   },
 
   title: {
-    fontFamily:
-      'InterBold',
-    fontSize: 22,
-    color:
-      colors.text,
+    fontFamily: 'InterSemiBold',
+    fontSize: 20,
+    lineHeight: 26,
+    color: colors.text,
+    letterSpacing: -0.2,
   },
 
   subtitle: {
-    fontFamily:
-      'InterRegular',
-    fontSize: 10,
-    color:
-      colors.textMuted,
+    fontFamily: 'InterRegular',
+    fontSize: 11,
+    lineHeight: 16,
+    color: colors.textMuted,
     marginTop: 3,
   },
 
   editHeaderButton: {
-    width: 42,
     height: 42,
-    borderRadius: 13,
-    backgroundColor:
-      colors.white,
+    paddingHorizontal: 13,
+    borderRadius: 11,
+    backgroundColor: colors.accentLight,
     borderWidth: 1,
-    borderColor:
-      colors.border,
+    borderColor: '#DBEAFE',
     alignItems: 'center',
     justifyContent: 'center',
+    flexDirection: 'row',
+    gap: 6,
   },
 
-  // =========================================================
-  // PROFILE CARD
-  // =========================================================
+  editHeaderText: {
+    fontFamily: 'InterSemiBold',
+    fontSize: 12,
+    color: colors.accent,
+  },
+
+  // =======================================================
+  // ERROR
+  // =======================================================
+
+  errorBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 13,
+    borderRadius: 10,
+    backgroundColor: colors.dangerLight,
+    borderWidth: 1,
+    borderColor: '#FECACA',
+  },
+
+  errorText: {
+    flex: 1,
+    marginHorizontal: 8,
+    fontFamily: 'InterRegular',
+    fontSize: 11,
+    lineHeight: 17,
+    color: colors.danger,
+  },
+
+  // =======================================================
+  // PROFILE SUMMARY
+  // =======================================================
 
   profileCard: {
-    backgroundColor:
-      colors.white,
-    borderRadius:
-      spacing.radiusLarge,
+    backgroundColor: colors.surface,
+    borderRadius: 15,
     borderWidth: 1,
-    borderColor:
-      colors.borderLight,
-    padding: 15,
+    borderColor: colors.border,
+    padding: 16,
     flexDirection: 'row',
     alignItems: 'center',
   },
 
   avatarContainer: {
-    width: 64,
-    height: 64,
+    width: 68,
+    height: 68,
     position: 'relative',
-    marginRight: 12,
+    marginRight: 13,
   },
 
-  avatar: {
-    width: 64,
-    height: 64,
-    borderRadius: 20,
-    backgroundColor:
-      colors.accentLight,
+  avatarFallback: {
+    width: 68,
+    height: 68,
+    borderRadius: 19,
+    backgroundColor: colors.accentLight,
     alignItems: 'center',
     justifyContent: 'center',
   },
 
   avatarImage: {
-    width: 64,
-    height: 64,
-    borderRadius: 20,
+    width: 68,
+    height: 68,
+    borderRadius: 19,
+    backgroundColor: colors.borderLight,
   },
 
   avatarText: {
-    fontFamily:
-      'InterBold',
-    fontSize: 17,
-    color:
-      colors.accent,
+    fontFamily: 'InterSemiBold',
+    fontSize: 19,
+    color: colors.accent,
   },
 
   cameraButton: {
     position: 'absolute',
-    right: -4,
-    bottom: -4,
-    width: 25,
-    height: 25,
+    right: -5,
+    bottom: -5,
+    width: 27,
+    height: 27,
     borderRadius: 9,
-    backgroundColor:
-      colors.accent,
+    backgroundColor: colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 2,
-    borderColor:
-      colors.white,
+    borderColor: colors.surface,
   },
 
   profileInfo: {
@@ -1875,89 +1222,87 @@ const styles = StyleSheet.create({
   },
 
   name: {
-    fontFamily:
-      'InterBold',
-    fontSize: 15,
-    color:
-      colors.text,
+    fontFamily: 'InterSemiBold',
+    fontSize: 16,
+    lineHeight: 21,
+    color: colors.text,
   },
 
   phone: {
-    fontFamily:
-      'InterRegular',
-    fontSize: 9,
-    color:
-      colors.textMuted,
+    fontFamily: 'InterRegular',
+    fontSize: 11,
+    lineHeight: 17,
+    color: colors.textMuted,
     marginTop: 3,
   },
 
   verifiedRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: 5,
+    marginTop: 6,
   },
 
   verifiedText: {
-    fontFamily:
-      'InterMedium',
-    fontSize: 8,
-    color:
-      colors.successDark ||
-      colors.success,
+    fontFamily: 'InterMedium',
+    fontSize: 10,
+    color: colors.successDark,
     marginLeft: 4,
   },
 
-  // =========================================================
+  photoHint: {
+    fontFamily: 'InterRegular',
+    fontSize: 10,
+    lineHeight: 15,
+    color: colors.textMuted,
+    marginTop: 7,
+    marginHorizontal: 2,
+  },
+
+  // =======================================================
   // SECTION
-  // =========================================================
+  // =======================================================
 
   sectionTitle: {
-    fontFamily:
-      'InterBold',
-    fontSize: 15,
-    color:
-      colors.text,
+    fontFamily: 'InterSemiBold',
+    fontSize: 14,
+    lineHeight: 19,
+    color: colors.text,
     marginTop: 20,
     marginBottom: 10,
   },
 
-  // =========================================================
+  // =======================================================
   // CARD
-  // =========================================================
+  // =======================================================
 
   card: {
-    backgroundColor:
-      colors.white,
-    borderRadius:
-      spacing.radiusLarge,
+    backgroundColor: colors.surface,
+    borderRadius: 15,
     borderWidth: 1,
-    borderColor:
-      colors.borderLight,
+    borderColor: colors.border,
     paddingHorizontal: 14,
   },
 
-  // =========================================================
+  // =======================================================
   // INFO ROW
-  // =========================================================
+  // =======================================================
 
   infoRow: {
-    minHeight: 59,
+    minHeight: 61,
     flexDirection: 'row',
     alignItems: 'center',
   },
 
   infoRowBorder: {
     borderBottomWidth: 1,
-    borderBottomColor:
-      colors.borderLight,
+    borderBottomColor: colors.borderLight,
   },
 
   infoIcon: {
     width: 36,
     height: 36,
     borderRadius: 11,
-    backgroundColor:
-      colors.accentLight,
+    backgroundColor: colors.accentLight,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 10,
@@ -1968,25 +1313,22 @@ const styles = StyleSheet.create({
   },
 
   infoLabel: {
-    fontFamily:
-      'InterRegular',
-    fontSize: 8,
-    color:
-      colors.textMuted,
+    fontFamily: 'InterRegular',
+    fontSize: 9,
+    color: colors.textMuted,
   },
 
   infoValue: {
-    fontFamily:
-      'InterSemiBold',
-    fontSize: 11,
-    color:
-      colors.text,
+    fontFamily: 'InterMedium',
+    fontSize: 12,
+    lineHeight: 17,
+    color: colors.text,
     marginTop: 3,
   },
 
-  // =========================================================
+  // =======================================================
   // INPUT
-  // =========================================================
+  // =======================================================
 
   inputField: {
     minHeight: 70,
@@ -1996,16 +1338,14 @@ const styles = StyleSheet.create({
 
   inputFieldBorder: {
     borderBottomWidth: 1,
-    borderBottomColor:
-      colors.borderLight,
+    borderBottomColor: colors.borderLight,
   },
 
   inputIcon: {
     width: 36,
     height: 36,
     borderRadius: 11,
-    backgroundColor:
-      colors.accentLight,
+    backgroundColor: colors.accentLight,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 10,
@@ -2016,144 +1356,78 @@ const styles = StyleSheet.create({
   },
 
   inputLabel: {
-    fontFamily:
-      'InterRegular',
-    fontSize: 8,
-    color:
-      colors.textMuted,
+    fontFamily: 'InterRegular',
+    fontSize: 9,
+    color: colors.textMuted,
     marginBottom: 3,
   },
 
   textInput: {
     padding: 0,
     margin: 0,
-    fontFamily:
-      'InterSemiBold',
-    fontSize: 11,
-    color:
-      colors.text,
+    fontFamily: 'InterMedium',
+    fontSize: 12,
+    lineHeight: 18,
+    color: colors.text,
     minHeight: 24,
   },
 
-  // =========================================================
-  // AVAILABILITY
-  // =========================================================
-
-  availabilityCard: {
-    backgroundColor:
-      colors.white,
-    borderRadius:
-      spacing.radiusMedium,
-    borderWidth: 1,
-    borderColor:
-      colors.borderLight,
-    padding: 13,
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-
-  availabilityIcon: {
-    width: 42,
-    height: 42,
-    borderRadius: 13,
-    backgroundColor:
-      colors.background,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-
-  availabilityIconActive: {
-    backgroundColor:
-      colors.successLight,
-  },
-
-  availabilityInfo: {
-    flex: 1,
-    marginLeft: 11,
-    marginRight: 10,
-  },
-
-  availabilityTitle: {
-    fontFamily:
-      'InterSemiBold',
-    fontSize: 11,
-    color:
-      colors.text,
-  },
-
-  availabilitySubtitle: {
-    fontFamily:
-      'InterRegular',
-    fontSize: 8,
-    color:
-      colors.textMuted,
-    marginTop: 3,
-  },
-
-  // =========================================================
+  // =======================================================
   // ACTIONS
-  // =========================================================
+  // =======================================================
 
   actionRow: {
     flexDirection: 'row',
-    gap: 10,
     marginTop: 18,
   },
 
   cancelButton: {
     flex: 1,
     height: 46,
-    borderRadius: 13,
-    backgroundColor:
-      colors.white,
+    borderRadius: 11,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor:
-      colors.border,
+    borderColor: colors.border,
     alignItems: 'center',
     justifyContent: 'center',
+    marginRight: 5,
   },
 
   cancelText: {
-    fontFamily:
-      'InterSemiBold',
-    fontSize: 10,
-    color:
-      colors.textSecondary,
+    fontFamily: 'InterSemiBold',
+    fontSize: 12,
+    color: colors.textSecondary,
   },
 
   saveButton: {
-    flex: 1.5,
+    flex: 1.45,
     height: 46,
-    borderRadius: 13,
-    backgroundColor:
-      colors.accent,
+    borderRadius: 11,
+    backgroundColor: colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
     gap: 6,
+    marginLeft: 5,
   },
 
   saveText: {
-    fontFamily:
-      'InterBold',
-    fontSize: 10,
-    color:
-      colors.white,
+    fontFamily: 'InterSemiBold',
+    fontSize: 12,
+    color: colors.white,
   },
 
-  // =========================================================
+  // =======================================================
   // LOGOUT
-  // =========================================================
+  // =======================================================
 
   logoutButton: {
     height: 46,
-    borderRadius: 13,
+    borderRadius: 11,
     marginTop: 22,
-    backgroundColor:
-      colors.white,
+    backgroundColor: colors.surface,
     borderWidth: 1,
-    borderColor:
-      colors.borderLight,
+    borderColor: '#FECACA',
     alignItems: 'center',
     justifyContent: 'center',
     flexDirection: 'row',
@@ -2161,103 +1435,86 @@ const styles = StyleSheet.create({
   },
 
   logoutText: {
-    fontFamily:
-      'InterSemiBold',
-    fontSize: 10,
-    color:
-      colors.danger ||
-      '#DC2626',
+    fontFamily: 'InterSemiBold',
+    fontSize: 12,
+    color: colors.danger,
   },
 
   versionText: {
-    fontFamily:
-      'InterRegular',
-    fontSize: 8,
-    color:
-      colors.textLight,
+    fontFamily: 'InterRegular',
+    fontSize: 9,
+    color: colors.textLight,
     textAlign: 'center',
     marginTop: 15,
   },
 
-  // =========================================================
+  // =======================================================
   // LOADING
-  // =========================================================
+  // =======================================================
 
   loadingContainer: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor:
-      colors.background,
+    backgroundColor: colors.background,
   },
 
   loadingText: {
-    fontFamily:
-      'InterRegular',
-    fontSize: 10,
-    color:
-      colors.textMuted,
+    fontFamily: 'InterRegular',
+    fontSize: 11,
+    color: colors.textMuted,
     marginTop: 10,
   },
 
-  // =========================================================
+  // =======================================================
   // EMPTY
-  // =========================================================
+  // =======================================================
 
   emptyContainer: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     padding: 25,
-    backgroundColor:
-      colors.background,
+    backgroundColor: colors.background,
   },
 
   emptyIcon: {
     width: 64,
     height: 64,
-    borderRadius: 20,
-    backgroundColor:
-      colors.accentLight,
+    borderRadius: 19,
+    backgroundColor: colors.accentLight,
     alignItems: 'center',
     justifyContent: 'center',
   },
 
   emptyTitle: {
-    fontFamily:
-      'InterBold',
-    fontSize: 16,
-    color:
-      colors.text,
+    fontFamily: 'InterSemiBold',
+    fontSize: 17,
+    color: colors.text,
     marginTop: 15,
   },
 
   emptyDescription: {
-    fontFamily:
-      'InterRegular',
-    fontSize: 10,
-    color:
-      colors.textMuted,
+    fontFamily: 'InterRegular',
+    fontSize: 11,
+    color: colors.textMuted,
     marginTop: 6,
     textAlign: 'center',
   },
 
   retryButton: {
-    height: 42,
-    paddingHorizontal: 25,
-    borderRadius: 12,
-    backgroundColor:
-      colors.accent,
+    height: 44,
+    paddingHorizontal: 24,
+    borderRadius: 11,
+    backgroundColor: colors.accent,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: 18,
   },
 
   retryText: {
-    fontFamily:
-      'InterBold',
-    fontSize: 10,
-    color:
-      colors.white,
+    fontFamily: 'InterSemiBold',
+    fontSize: 12,
+    color: colors.white,
   },
 });

@@ -7,16 +7,31 @@ import {
 
 import {
   clearAuthSession,
-  getToken,
   getUser,
+  getValidToken,
+  saveAuthSession,
 } from '../utils/authStorage';
 
-const AuthContext = createContext(null);
+const AuthContext =
+  createContext(null);
 
-export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);
-  const [token, setToken] = useState(null);
-  const [loading, setLoading] = useState(true);
+export function AuthProvider({
+  children,
+}) {
+  const [
+    user,
+    setUser,
+  ] = useState(null);
+
+  const [
+    token,
+    setToken,
+  ] = useState(null);
+
+  const [
+    loading,
+    setLoading,
+  ] = useState(true);
 
   // =========================================================
   // RESTORE SESSION
@@ -26,26 +41,54 @@ export function AuthProvider({ children }) {
     restoreSession();
   }, []);
 
-  const restoreSession = async () => {
-    try {
-      const storedToken = await getToken();
-      const storedUser = await getUser();
+  const restoreSession =
+    async () => {
 
-      if (storedToken) {
-        setToken(storedToken);
-        setUser(storedUser);
+      try {
+
+        const validToken =
+          await getValidToken();
+
+        if (!validToken) {
+
+          setToken(null);
+          setUser(null);
+
+          return;
+        }
+
+        const storedUser =
+          await getUser();
+
+        setToken(
+          validToken
+        );
+
+        setUser(
+          storedUser
+        );
+
+        console.log(
+          '[Auth] Valid stored session restored'
+        );
+
+      } catch (error) {
+
+        console.error(
+          '[Auth] Unable to restore session:',
+          error
+        );
+
+        await clearAuthSession();
+
+        setToken(null);
+        setUser(null);
+
+      } finally {
+
+        setLoading(false);
       }
-    } catch (error) {
-      console.error(
-        'Unable to restore authentication session:',
-        error
-      );
-
-      await clearAuthSession();
-    } finally {
-      setLoading(false);
-    }
-  };
+    };
 
   // =========================================================
   // LOGIN
@@ -55,54 +98,100 @@ export function AuthProvider({ children }) {
     accessToken,
     userData
   ) => {
-    setToken(accessToken);
-    setUser(userData);
+
+    if (!accessToken) {
+      throw new Error(
+        'Authentication token is missing.'
+      );
+    }
+
+    await saveAuthSession(
+      accessToken,
+      userData
+    );
+
+    setToken(
+      accessToken
+    );
+
+    setUser(
+      userData || null
+    );
+
+    console.log(
+      '[Auth] Login session established'
+    );
   };
 
   // =========================================================
   // LOGOUT
   // =========================================================
 
-  const logout = async () => {
-    try {
-      await clearAuthSession();
-    } catch (error) {
-      console.error(
-        'Logout error:',
-        error
-      );
-    } finally {
-      setToken(null);
-      setUser(null);
-    }
-  };
+ const logout = async () => {
+  console.log('[Auth] Logout started');
+
+  try {
+    // Clear the stored authentication session
+    await clearAuthSession();
+
+    console.log(
+      '[Auth] Stored session cleared'
+    );
+
+  } catch (error) {
+
+    console.error(
+      '[Auth] Failed to clear stored session:',
+      error
+    );
+
+  } finally {
+
+    // VERY IMPORTANT
+    setToken(null);
+    setUser(null);
+
+    console.log(
+      '[Auth] React authentication state cleared'
+    );
+  }
+};
 
   // =========================================================
-  // CONTEXT VALUE
+  // CONTEXT
   // =========================================================
 
   const value = {
     user,
     token,
     loading,
-    isAuthenticated: Boolean(token),
+
+    isAuthenticated:
+      Boolean(token),
+
     login,
     logout,
   };
 
   return (
-    <AuthContext.Provider value={value}>
+    <AuthContext.Provider
+      value={value}
+    >
       {children}
     </AuthContext.Provider>
   );
 }
 
-// ===========================================================
-// AUTH HOOK
-// ===========================================================
+// =========================================================
+// HOOK
+// =========================================================
 
 export function useAuth() {
-  const context = useContext(AuthContext);
+
+  const context =
+    useContext(
+      AuthContext
+    );
 
   if (!context) {
     throw new Error(

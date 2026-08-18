@@ -1,9 +1,15 @@
-import { Ionicons } from '@expo/vector-icons';
-import { Tabs } from 'expo-router';
+import {
+  Tabs,
+} from 'expo-router';
+
+import {
+  Ionicons,
+} from '@expo/vector-icons';
 
 import colors from '../../constants/colors';
 
 export default function TabsLayout() {
+
   return (
     <Tabs
       screenOptions={{
@@ -16,17 +22,43 @@ export default function TabsLayout() {
           colors.textMuted,
 
         tabBarStyle: {
-          height: 68,
-          paddingTop: 7,
-          paddingBottom: 8,
-          backgroundColor: colors.white,
+          height: 72,
+
+          paddingTop: 8,
+
+          paddingBottom: 10,
+
+          backgroundColor:
+            colors.white,
+
           borderTopWidth: 1,
-          borderTopColor: colors.borderLight,
+
+          borderTopColor:
+            colors.borderLight,
+
+          elevation: 8,
+
+          shadowOpacity: 0.08,
+
+          shadowRadius: 10,
+
+          shadowOffset: {
+            width: 0,
+            height: -3,
+          },
         },
 
         tabBarLabelStyle: {
-          fontSize: 10,
-          fontWeight: '600',
+          fontFamily:
+            'InterSemiBold',
+
+          fontSize: 9,
+
+          marginTop: 2,
+        },
+
+        tabBarIconStyle: {
+          marginBottom: -1,
         },
       }}
     >
@@ -38,11 +70,15 @@ export default function TabsLayout() {
 
           tabBarIcon: ({
             color,
-            size,
+            focused,
           }) => (
             <Ionicons
-              name="home-outline"
-              size={size}
+              name={
+                focused
+                  ? 'home'
+                  : 'home-outline'
+              }
+              size={22}
               color={color}
             />
           ),
@@ -56,11 +92,37 @@ export default function TabsLayout() {
 
           tabBarIcon: ({
             color,
-            size,
+            focused,
           }) => (
             <Ionicons
-              name="clipboard-outline"
-              size={size}
+              name={
+                focused
+                  ? 'document-text'
+                  : 'document-text-outline'
+              }
+              size={22}
+              color={color}
+            />
+          ),
+        }}
+      />
+
+      <Tabs.Screen
+        name="vehicle"
+        options={{
+          title: 'Vehicle',
+
+          tabBarIcon: ({
+            color,
+            focused,
+          }) => (
+            <Ionicons
+              name={
+                focused
+                  ? 'car-sport'
+                  : 'car-sport-outline'
+              }
+              size={23}
               color={color}
             />
           ),
@@ -74,11 +136,15 @@ export default function TabsLayout() {
 
           tabBarIcon: ({
             color,
-            size,
+            focused,
           }) => (
             <Ionicons
-              name="person-outline"
-              size={size}
+              name={
+                focused
+                  ? 'person'
+                  : 'person-outline'
+              }
+              size={22}
               color={color}
             />
           ),
