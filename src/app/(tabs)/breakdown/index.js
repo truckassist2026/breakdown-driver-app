@@ -11,8 +11,8 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 
-import colors from '../../constants/colors';
-import spacing from '../../constants/spacing';
+import colors from '../../../constants/colors';
+import spacing from '../../../constants/spacing';
 
 export default function RequestAssistanceScreen() {
   const router = useRouter();

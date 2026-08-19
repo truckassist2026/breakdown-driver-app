@@ -1,5 +1,6 @@
 import {
   ActivityIndicator,
+  Alert,
   ScrollView,
   StyleSheet,
   Text,
@@ -22,6 +23,8 @@ import {
 import colors from '../../constants/colors';
 
 import {
+  cancelServiceRequest,
+  getActiveServiceRequest,
   getMyServiceRequests,
 } from '../../services/requestService';
 
@@ -98,11 +101,13 @@ function getVehicleName(vehicle) {
 
 
 // =========================================================
-// STATUS LABEL
+// REQUEST STATUS LABEL
 // =========================================================
 
 function getRequestStatusLabel(status) {
-  switch (status) {
+  switch (
+    String(status || '').toUpperCase()
+  ) {
 
     case 'CREATED':
       return 'Request Created';
@@ -138,11 +143,78 @@ function getRequestStatusLabel(status) {
 
 
 // =========================================================
+// REQUEST STATUS COLOR
+// =========================================================
+
+function getRequestStatusColors(status) {
+
+  switch (
+    String(status || '').toUpperCase()
+  ) {
+
+    case 'SEARCHING':
+    case 'CREATED':
+      return {
+        background:
+          colors.warningLight,
+        text:
+          colors.warning,
+      };
+
+    case 'ASSIGNED':
+    case 'MECHANIC_EN_ROUTE':
+    case 'ARRIVED':
+      return {
+        background:
+          colors.infoLight,
+        text:
+          colors.info,
+      };
+
+    case 'IN_PROGRESS':
+      return {
+        background:
+          colors.accentLight,
+        text:
+          colors.accent,
+      };
+
+    case 'COMPLETED':
+      return {
+        background:
+          colors.successLight,
+        text:
+          colors.success,
+      };
+
+    case 'CANCELLED':
+      return {
+        background:
+          colors.dangerLight,
+        text:
+          colors.danger,
+      };
+
+    default:
+      return {
+        background:
+          colors.borderLight,
+        text:
+          colors.textMuted,
+      };
+  }
+}
+
+
+// =========================================================
 // CATEGORY ICON
 // =========================================================
 
 function getCategoryIcon(category) {
-  switch (category) {
+
+  switch (
+    String(category || '').toUpperCase()
+  ) {
 
     case 'TYRE':
       return 'speedometer-outline';
@@ -173,7 +245,10 @@ function getCategoryIcon(category) {
 // =========================================================
 
 function getCategoryTitle(category) {
-  switch (category) {
+
+  switch (
+    String(category || '').toUpperCase()
+  ) {
 
     case 'TYRE':
       return 'Tyre Assistance';
@@ -197,7 +272,8 @@ function getCategoryTitle(category) {
       return 'Other Assistance';
 
     default:
-      return category || 'Service Request';
+      return category ||
+        'Service Request';
   }
 }
 
@@ -206,7 +282,9 @@ function getCategoryTitle(category) {
 // DATE FORMATTER
 // =========================================================
 
-function formatRequestDate(dateValue) {
+function formatRequestDate(
+  dateValue
+) {
 
   if (!dateValue) {
     return '';
@@ -242,6 +320,46 @@ function formatRequestDate(dateValue) {
 
 
 // =========================================================
+// TIME FORMATTER
+// =========================================================
+
+function formatRequestTime(
+  dateValue
+) {
+
+  if (!dateValue) {
+    return '';
+  }
+
+  try {
+
+    const date =
+      new Date(dateValue);
+
+    if (
+      Number.isNaN(
+        date.getTime()
+      )
+    ) {
+      return '';
+    }
+
+    return date.toLocaleTimeString(
+      'en-IN',
+      {
+        hour: '2-digit',
+        minute: '2-digit',
+      }
+    );
+
+  } catch (error) {
+
+    return '';
+  }
+}
+
+
+// =========================================================
 // HOME SCREEN
 // =========================================================
 
@@ -252,7 +370,7 @@ export default function HomeScreen() {
 
 
   // =======================================================
-  // DRIVER PROFILE STATE
+  // DRIVER PROFILE
   // =======================================================
 
   const [
@@ -267,7 +385,7 @@ export default function HomeScreen() {
 
 
   // =======================================================
-  // PRIMARY VEHICLE STATE
+  // PRIMARY VEHICLE
   // =======================================================
 
   const [
@@ -282,7 +400,27 @@ export default function HomeScreen() {
 
 
   // =======================================================
-  // SERVICE REQUEST STATE
+  // ACTIVE SERVICE
+  // =======================================================
+
+  const [
+    activeRequest,
+    setActiveRequest,
+  ] = useState(null);
+
+  const [
+    loadingActiveRequest,
+    setLoadingActiveRequest,
+  ] = useState(true);
+
+  const [
+    cancellingRequest,
+    setCancellingRequest,
+  ] = useState(false);
+
+
+  // =======================================================
+  // RECENT SERVICE
   // =======================================================
 
   const [
@@ -302,7 +440,7 @@ export default function HomeScreen() {
 
 
   // =======================================================
-  // BREAKDOWN TYPES
+  // QUICK ASSISTANCE
   // =======================================================
 
   const breakdownTypes = [
@@ -356,7 +494,9 @@ export default function HomeScreen() {
 
         try {
 
-          setLoadingDriver(true);
+          setLoadingDriver(
+            true
+          );
 
           const response =
             await getMyDriverProfile();
@@ -383,7 +523,9 @@ export default function HomeScreen() {
 
         } finally {
 
-          setLoadingDriver(false);
+          setLoadingDriver(
+            false
+          );
         }
 
       },
@@ -401,7 +543,9 @@ export default function HomeScreen() {
 
         try {
 
-          setLoadingVehicle(true);
+          setLoadingVehicle(
+            true
+          );
 
           const response =
             await getMyVehicles();
@@ -417,10 +561,6 @@ export default function HomeScreen() {
               : [];
 
 
-          // -------------------------------------------------
-          // Find explicitly selected primary vehicle
-          // -------------------------------------------------
-
           const primary =
             vehicles.find(
               (vehicle) =>
@@ -432,10 +572,6 @@ export default function HomeScreen() {
             );
 
 
-          // -------------------------------------------------
-          // Fallback to first ACTIVE vehicle
-          // -------------------------------------------------
-
           const activeVehicle =
             vehicles.find(
               (vehicle) =>
@@ -446,20 +582,10 @@ export default function HomeScreen() {
             );
 
 
-          const selectedVehicle =
+          setPrimaryVehicle(
             primary ||
             activeVehicle ||
-            null;
-
-
-          console.log(
-            '[Truck Assist] Selected primary vehicle:',
-            selectedVehicle
-          );
-
-
-          setPrimaryVehicle(
-            selectedVehicle
+            null
           );
 
         } catch (error) {
@@ -475,7 +601,72 @@ export default function HomeScreen() {
 
         } finally {
 
-          setLoadingVehicle(false);
+          setLoadingVehicle(
+            false
+          );
+        }
+
+      },
+      []
+    );
+
+
+  // =======================================================
+  // LOAD ACTIVE SERVICE
+  // =======================================================
+
+  const loadActiveRequest =
+    useCallback(
+      async () => {
+
+        try {
+
+          setLoadingActiveRequest(
+            true
+          );
+
+          const response =
+            await getActiveServiceRequest();
+
+          console.log(
+            '[Truck Assist] Active request:',
+            response
+          );
+
+          setActiveRequest(
+            response || null
+          );
+
+        } catch (error) {
+
+          // 404 means there is no active request.
+          // This is a normal state.
+
+          if (
+            error?.status === 404
+          ) {
+
+            setActiveRequest(
+              null
+            );
+
+          } else {
+
+            console.error(
+              'Unable to load active service:',
+              error
+            );
+
+            setActiveRequest(
+              null
+            );
+          }
+
+        } finally {
+
+          setLoadingActiveRequest(
+            false
+          );
         }
 
       },
@@ -493,20 +684,21 @@ export default function HomeScreen() {
 
         try {
 
-          setLoadingRequests(true);
+          setLoadingRequests(
+            true
+          );
 
-          setRequestError(null);
-
+          setRequestError(
+            null
+          );
 
           const requests =
             await getMyServiceRequests();
-
 
           console.log(
             '[Truck Assist] Driver service requests:',
             requests
           );
-
 
           if (
             Array.isArray(requests) &&
@@ -538,7 +730,9 @@ export default function HomeScreen() {
 
         } finally {
 
-          setLoadingRequests(false);
+          setLoadingRequests(
+            false
+          );
         }
 
       },
@@ -547,43 +741,142 @@ export default function HomeScreen() {
 
 
   // =======================================================
-  // LOAD WHEN HOME SCREEN GETS FOCUS
+  // REFRESH HOME
+  // =======================================================
+
+  const refreshHome =
+    useCallback(
+      async () => {
+
+        await Promise.all([
+          loadDriverProfile(),
+          loadPrimaryVehicle(),
+          loadActiveRequest(),
+          loadRecentRequest(),
+        ]);
+
+      },
+      [
+        loadDriverProfile,
+        loadPrimaryVehicle,
+        loadActiveRequest,
+        loadRecentRequest,
+      ]
+    );
+
+
+  // =======================================================
+  // LOAD WHEN HOME GETS FOCUS
   // =======================================================
 
   useFocusEffect(
     useCallback(
       () => {
 
-        loadDriverProfile();
-
-        loadPrimaryVehicle();
-
-        loadRecentRequest();
+        refreshHome();
 
       },
       [
-        loadDriverProfile,
-        loadPrimaryVehicle,
-        loadRecentRequest,
+        refreshHome,
       ]
     )
   );
 
 
   // =======================================================
-  // OPEN RECENT REQUEST
+  // OPEN REQUEST
   // =======================================================
 
-  const openRecentRequest = () => {
+  const openRequest = (
+    requestId
+  ) => {
 
-    if (!recentRequest?.id) {
+    if (!requestId) {
       return;
     }
 
     router.push(
-      `/requests/${recentRequest.id}`
+      `/requests/${requestId}`
     );
   };
+
+
+  // =======================================================
+  // CANCEL ACTIVE REQUEST
+  // =======================================================
+
+  const handleCancelRequest =
+    () => {
+
+      if (
+        !activeRequest?.id ||
+        cancellingRequest
+      ) {
+        return;
+      }
+
+      Alert.alert(
+        'Cancel Request',
+        'Are you sure you want to cancel this service request?',
+        [
+          {
+            text: 'Keep Request',
+            style: 'cancel',
+          },
+
+          {
+            text: 'Cancel Request',
+            style: 'destructive',
+
+            onPress:
+              async () => {
+
+                try {
+
+                  setCancellingRequest(
+                    true
+                  );
+
+                  await cancelServiceRequest(
+                    activeRequest.id
+                  );
+
+                  console.log(
+                    '[Truck Assist] Service request cancelled'
+                  );
+
+                  setActiveRequest(
+                    null
+                  );
+
+                  // Refresh recent service
+                  await loadRecentRequest();
+
+                } catch (error) {
+
+                  console.error(
+                    'Unable to cancel request:',
+                    error
+                  );
+
+                  Alert.alert(
+                    'Unable to Cancel',
+                    error?.message ||
+                    'Unable to cancel the service request. Please try again.'
+                  );
+
+                } finally {
+
+                  setCancellingRequest(
+                    false
+                  );
+                }
+
+              },
+          },
+        ]
+      );
+    };
 
 
   // =======================================================
@@ -601,6 +894,22 @@ export default function HomeScreen() {
 
   const greeting =
     getGreeting();
+
+
+  // =======================================================
+  // ACTIVE REQUEST STATUS
+  // =======================================================
+
+  const activeStatus =
+    getRequestStatusLabel(
+      activeRequest?.status
+    );
+
+
+  const activeStatusColors =
+    getRequestStatusColors(
+      activeRequest?.status
+    );
 
 
   // =======================================================
@@ -622,7 +931,9 @@ export default function HomeScreen() {
             HEADER
             ================================================= */}
 
-        <View style={styles.header}>
+        <View
+          style={styles.header}
+        >
 
           <View>
 
@@ -631,7 +942,6 @@ export default function HomeScreen() {
             >
               {greeting} 👋
             </Text>
-
 
             <Text
               style={styles.name}
@@ -676,6 +986,11 @@ export default function HomeScreen() {
         <TouchableOpacity
           style={styles.vehicleCard}
           activeOpacity={0.85}
+          onPress={() =>
+            router.push(
+              '/(tabs)/vehicle'
+            )
+          }
         >
 
           <View
@@ -728,8 +1043,7 @@ export default function HomeScreen() {
                   numberOfLines={1}
                 >
                   {
-                    primaryVehicle
-                      ?.registrationNumber ||
+                    primaryVehicle?.registrationNumber ||
                     'Registration unavailable'
                   }
                 </Text>
@@ -786,11 +1100,405 @@ export default function HomeScreen() {
 
 
         {/* =================================================
+            ACTIVE SERVICE
+            ================================================= */}
+
+        {!loadingActiveRequest &&
+          activeRequest && (
+
+            <View
+              style={
+                styles.activeServiceCard
+              }
+            >
+
+              {/* -------------------------------------------
+                  ACTIVE HEADER
+                  ------------------------------------------- */}
+
+              <View
+                style={
+                  styles.activeHeader
+                }
+              >
+
+                <View
+                  style={
+                    styles.activeHeaderLeft
+                  }
+                >
+
+                  <View
+                    style={
+                      styles.activeIcon
+                    }
+                  >
+
+                    <Ionicons
+                      name="construct"
+                      size={23}
+                      color={colors.white}
+                    />
+
+                  </View>
+
+
+                  <View>
+
+                    <Text
+                      style={
+                        styles.activeTitle
+                      }
+                    >
+                      Active Service
+                    </Text>
+
+
+                    <Text
+                      style={
+                        styles.activeSubtitle
+                      }
+                    >
+                      Your assistance request
+                    </Text>
+
+                  </View>
+
+                </View>
+
+
+                <View
+                  style={[
+                    styles.activeStatusBadge,
+                    {
+                      backgroundColor:
+                        activeStatusColors.background,
+                    },
+                  ]}
+                >
+
+                  <Text
+                    style={[
+                      styles.activeStatusText,
+                      {
+                        color:
+                          activeStatusColors.text,
+                      },
+                    ]}
+                  >
+                    {activeStatus}
+                  </Text>
+
+                </View>
+
+              </View>
+
+
+              {/* -------------------------------------------
+                  REQUEST DETAILS
+                  ------------------------------------------- */}
+
+              <View
+                style={
+                  styles.activeDetails
+                }
+              >
+
+                <View
+                  style={
+                    styles.activeDetailRow
+                  }
+                >
+
+                  <Ionicons
+                    name={
+                      getCategoryIcon(
+                        activeRequest.category
+                      )
+                    }
+                    size={19}
+                    color={colors.accent}
+                  />
+
+                  <View
+                    style={
+                      styles.activeDetailContent
+                    }
+                  >
+
+                    <Text
+                      style={
+                        styles.activeDetailLabel
+                      }
+                    >
+                      SERVICE
+                    </Text>
+
+
+                    <Text
+                      style={
+                        styles.activeDetailValue
+                      }
+                    >
+                      {
+                        getCategoryTitle(
+                          activeRequest.category
+                        )
+                      }
+                    </Text>
+
+                  </View>
+
+                </View>
+
+
+                <View
+                  style={
+                    styles.activeDetailDivider
+                  }
+                />
+
+
+                <View
+                  style={
+                    styles.activeDetailRow
+                  }
+                >
+
+                  <Ionicons
+                    name="car-outline"
+                    size={19}
+                    color={colors.accent}
+                  />
+
+                  <View
+                    style={
+                      styles.activeDetailContent
+                    }
+                  >
+
+                    <Text
+                      style={
+                        styles.activeDetailLabel
+                      }
+                    >
+                      VEHICLE
+                    </Text>
+
+
+                    <Text
+                      style={
+                        styles.activeDetailValue
+                      }
+                    >
+                      {
+                        primaryVehicle?.registrationNumber ||
+                        'Vehicle'
+                      }
+                    </Text>
+
+                  </View>
+
+                </View>
+
+
+                <View
+                  style={
+                    styles.activeDetailDivider
+                  }
+                />
+
+
+                <View
+                  style={
+                    styles.activeDetailRow
+                  }
+                >
+
+                  <Ionicons
+                    name="time-outline"
+                    size={19}
+                    color={colors.accent}
+                  />
+
+                  <View
+                    style={
+                      styles.activeDetailContent
+                    }
+                  >
+
+                    <Text
+                      style={
+                        styles.activeDetailLabel
+                      }
+                    >
+                      REQUESTED
+                    </Text>
+
+
+                    <Text
+                      style={
+                        styles.activeDetailValue
+                      }
+                    >
+                      {formatRequestDate(
+                        activeRequest.createdAt
+                      )}
+
+                      {activeRequest.createdAt
+                        ? ` • ${formatRequestTime(
+                            activeRequest.createdAt
+                          )}`
+                        : ''}
+                    </Text>
+
+                  </View>
+
+                </View>
+
+              </View>
+
+
+              {/* -------------------------------------------
+                  DESCRIPTION
+                  ------------------------------------------- */}
+
+              {activeRequest.description ? (
+
+                <View
+                  style={
+                    styles.descriptionBox
+                  }
+                >
+
+                  <Text
+                    style={
+                      styles.descriptionLabel
+                    }
+                  >
+                    DESCRIPTION
+                  </Text>
+
+
+                  <Text
+                    style={
+                      styles.descriptionText
+                    }
+                    numberOfLines={2}
+                  >
+                    {
+                      activeRequest.description
+                    }
+                  </Text>
+
+                </View>
+
+              ) : null}
+
+
+              {/* -------------------------------------------
+                  ACTIONS
+                  ------------------------------------------- */}
+
+              <View
+                style={
+                  styles.activeActions
+                }
+              >
+
+                <TouchableOpacity
+                  style={
+                    styles.viewRequestButton
+                  }
+                  activeOpacity={0.85}
+                  onPress={() =>
+                    openRequest(
+                      activeRequest.id
+                    )
+                  }
+                >
+
+                  <Text
+                    style={
+                      styles.viewRequestText
+                    }
+                  >
+                    VIEW REQUEST
+                  </Text>
+
+
+                  <Ionicons
+                    name="arrow-forward"
+                    size={18}
+                    color={colors.white}
+                  />
+
+                </TouchableOpacity>
+
+
+                {[
+                  'CREATED',
+                  'SEARCHING',
+                ].includes(
+                  String(
+                    activeRequest.status ||
+                    ''
+                  ).toUpperCase()
+                ) && (
+
+                  <TouchableOpacity
+                    style={
+                      styles.cancelRequestButton
+                    }
+                    activeOpacity={0.8}
+                    disabled={
+                      cancellingRequest
+                    }
+                    onPress={
+                      handleCancelRequest
+                    }
+                  >
+
+                    {cancellingRequest ? (
+
+                      <ActivityIndicator
+                        size="small"
+                        color={
+                          colors.danger
+                        }
+                      />
+
+                    ) : (
+
+                      <Text
+                        style={
+                          styles.cancelRequestText
+                        }
+                      >
+                        CANCEL
+                      </Text>
+
+                    )}
+
+                  </TouchableOpacity>
+
+                )}
+
+              </View>
+
+            </View>
+
+          )}
+
+
+        {/* =================================================
             ASSISTANCE CARD
             ================================================= */}
 
         <View
-          style={styles.assistanceCard}
+          style={
+            styles.assistanceCard
+          }
         >
 
           <View
@@ -809,7 +1517,9 @@ export default function HomeScreen() {
 
 
           <Text
-            style={styles.assistanceTitle}
+            style={
+              styles.assistanceTitle
+            }
           >
             Vehicle breakdown?
           </Text>
@@ -826,12 +1536,19 @@ export default function HomeScreen() {
 
 
           <TouchableOpacity
-            style={styles.requestButton}
+            style={
+              styles.requestButton
+            }
             activeOpacity={0.85}
             onPress={() =>
-              router.push(
-                '/breakdown/category'
-              )
+              router.push({
+                pathname: '/breakdown/category',
+                params: {
+                  category: '',
+                  vehicleId: primaryVehicle?.id || '',
+                  vehicleNumber: primaryVehicle?.registrationNumber || '',
+                },
+              })
             }
           >
 
@@ -856,24 +1573,30 @@ export default function HomeScreen() {
 
 
         {/* =================================================
-            QUICK ASSISTANCE HEADER
+            QUICK ASSISTANCE
             ================================================= */}
 
         <View
-          style={styles.sectionHeader}
+          style={
+            styles.sectionHeader
+          }
         >
 
           <View>
 
             <Text
-              style={styles.sectionTitle}
+              style={
+                styles.sectionTitle
+              }
             >
               Quick Assistance
             </Text>
 
 
             <Text
-              style={styles.sectionSubtitle}
+              style={
+                styles.sectionSubtitle
+              }
             >
               Select your problem
             </Text>
@@ -883,11 +1606,9 @@ export default function HomeScreen() {
         </View>
 
 
-        {/* =================================================
-            QUICK ASSISTANCE GRID
-            ================================================= */}
-
-        <View style={styles.grid}>
+        <View
+          style={styles.grid}
+        >
 
           {breakdownTypes.map(
             (item) => (
@@ -899,9 +1620,14 @@ export default function HomeScreen() {
                 }
                 activeOpacity={0.85}
                 onPress={() =>
-                  router.push(
-                    '/breakdown/category'
-                  )
+                  router.push({
+                    pathname: '/breakdown/category',
+                    params: {
+                      category: item.category,
+                      vehicleId: primaryVehicle?.id || '',
+                      vehicleNumber: primaryVehicle?.registrationNumber || '',
+                    },
+                  })
                 }
               >
 
@@ -937,15 +1663,19 @@ export default function HomeScreen() {
 
 
         {/* =================================================
-            RECENT SERVICE HEADER
+            RECENT SERVICE
             ================================================= */}
 
         <View
-          style={styles.sectionHeader}
+          style={
+            styles.sectionHeader
+          }
         >
 
           <Text
-            style={styles.sectionTitle}
+            style={
+              styles.sectionTitle
+            }
           >
             Recent Service
           </Text>
@@ -961,7 +1691,9 @@ export default function HomeScreen() {
           >
 
             <Text
-              style={styles.viewAll}
+              style={
+                styles.viewAll
+              }
             >
               View all
             </Text>
@@ -970,10 +1702,6 @@ export default function HomeScreen() {
 
         </View>
 
-
-        {/* =================================================
-            RECENT SERVICE
-            ================================================= */}
 
         {loadingRequests ? (
 
@@ -1027,7 +1755,9 @@ export default function HomeScreen() {
 
 
             <View
-              style={styles.historyInfo}
+              style={
+                styles.historyInfo
+              }
             >
 
               <Text
@@ -1055,15 +1785,21 @@ export default function HomeScreen() {
         ) : recentRequest ? (
 
           <TouchableOpacity
-            style={styles.historyCard}
+            style={
+              styles.historyCard
+            }
             activeOpacity={0.85}
-            onPress={
-              openRecentRequest
+            onPress={() =>
+              openRequest(
+                recentRequest.id
+              )
             }
           >
 
             <View
-              style={styles.historyIcon}
+              style={
+                styles.historyIcon
+              }
             >
 
               <Ionicons
@@ -1080,7 +1816,9 @@ export default function HomeScreen() {
 
 
             <View
-              style={styles.historyInfo}
+              style={
+                styles.historyInfo
+              }
             >
 
               <Text
@@ -1103,7 +1841,8 @@ export default function HomeScreen() {
                 }
                 numberOfLines={1}
               >
-                #{String(
+                #
+                {String(
                   recentRequest.id || ''
                 ).slice(0, 8)}
 
@@ -1179,7 +1918,9 @@ export default function HomeScreen() {
 
 
             <View
-              style={styles.historyInfo}
+              style={
+                styles.historyInfo
+              }
             >
 
               <Text
@@ -1214,12 +1955,10 @@ export default function HomeScreen() {
         )}
 
 
-        {/* =================================================
-            BOTTOM SPACE
-            ================================================= */}
-
         <View
-          style={styles.bottomSpace}
+          style={
+            styles.bottomSpace
+          }
         />
 
       </ScrollView>
@@ -1235,10 +1974,6 @@ export default function HomeScreen() {
 
 const styles = StyleSheet.create({
 
-  // =======================================================
-  // CONTAINER
-  // =======================================================
-
   container: {
     flex: 1,
     backgroundColor:
@@ -1248,8 +1983,6 @@ const styles = StyleSheet.create({
   content: {
     paddingHorizontal: 20,
     paddingTop: 20,
-
-    // Space for Expo Router bottom tabs
     paddingBottom: 90,
   },
 
@@ -1297,12 +2030,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
 
     borderWidth: 1,
-    borderColor: colors.border,
+    borderColor:
+      colors.border,
   },
 
   notificationDot: {
     position: 'absolute',
-
     top: 10,
     right: 11,
 
@@ -1320,7 +2053,7 @@ const styles = StyleSheet.create({
 
 
   // =======================================================
-  // VEHICLE CARD
+  // VEHICLE
   // =======================================================
 
   vehicleCard: {
@@ -1395,8 +2128,305 @@ const styles = StyleSheet.create({
 
   vehicleLoading: {
     minHeight: 38,
+
     justifyContent: 'center',
     alignItems: 'flex-start',
+  },
+
+
+  // =======================================================
+  // ACTIVE SERVICE
+  // =======================================================
+
+  activeServiceCard: {
+    backgroundColor:
+      colors.white,
+
+    borderRadius: 20,
+
+    padding: 17,
+
+    marginBottom: 20,
+
+    borderWidth: 1,
+    borderColor:
+      colors.border,
+
+    shadowColor:
+      colors.shadow,
+
+    shadowOpacity: 0.06,
+    shadowRadius: 10,
+
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+
+    elevation: 2,
+  },
+
+  activeHeader: {
+    flexDirection: 'row',
+
+    alignItems: 'center',
+
+    justifyContent:
+      'space-between',
+
+    marginBottom: 16,
+  },
+
+  activeHeaderLeft: {
+    flexDirection: 'row',
+
+    alignItems: 'center',
+
+    flex: 1,
+
+    minWidth: 0,
+  },
+
+  activeIcon: {
+    width: 46,
+    height: 46,
+
+    borderRadius: 14,
+
+    backgroundColor:
+      colors.accent,
+
+    justifyContent: 'center',
+    alignItems: 'center',
+
+    marginRight: 11,
+  },
+
+  activeTitle: {
+    fontFamily:
+      'InterBold',
+
+    fontSize: 16,
+
+    color:
+      colors.text,
+  },
+
+  activeSubtitle: {
+    fontFamily:
+      'InterRegular',
+
+    fontSize: 11,
+
+    color:
+      colors.textMuted,
+
+    marginTop: 2,
+  },
+
+  activeStatusBadge: {
+    paddingHorizontal: 9,
+    paddingVertical: 6,
+
+    borderRadius: 9,
+
+    marginLeft: 8,
+
+    maxWidth: 125,
+  },
+
+  activeStatusText: {
+    fontFamily:
+      'InterBold',
+
+    fontSize: 9,
+
+    textAlign: 'center',
+  },
+
+
+  // =======================================================
+  // ACTIVE DETAILS
+  // =======================================================
+
+  activeDetails: {
+    backgroundColor:
+      colors.borderLight,
+
+    borderRadius: 14,
+
+    paddingHorizontal: 13,
+
+    paddingVertical: 5,
+  },
+
+  activeDetailRow: {
+    flexDirection: 'row',
+
+    alignItems: 'center',
+
+    paddingVertical: 10,
+  },
+
+  activeDetailContent: {
+    marginLeft: 11,
+
+    flex: 1,
+  },
+
+  activeDetailLabel: {
+    fontFamily:
+      'InterBold',
+
+    fontSize: 9,
+
+    color:
+      colors.textMuted,
+
+    letterSpacing: 0.6,
+
+    marginBottom: 2,
+  },
+
+  activeDetailValue: {
+    fontFamily:
+      'InterSemiBold',
+
+    fontSize: 13,
+
+    color:
+      colors.text,
+  },
+
+  activeDetailDivider: {
+    height: 1,
+
+    backgroundColor:
+      colors.border,
+
+    marginLeft: 30,
+  },
+
+
+  // =======================================================
+  // DESCRIPTION
+  // =======================================================
+
+  descriptionBox: {
+    marginTop: 12,
+
+    backgroundColor:
+      colors.accentLight,
+
+    borderRadius: 12,
+
+    padding: 11,
+  },
+
+  descriptionLabel: {
+    fontFamily:
+      'InterBold',
+
+    fontSize: 9,
+
+    color:
+      colors.textMuted,
+
+    letterSpacing: 0.6,
+
+    marginBottom: 4,
+  },
+
+  descriptionText: {
+    fontFamily:
+      'InterRegular',
+
+    fontSize: 12,
+
+    color:
+      colors.textSecondary,
+
+    lineHeight: 18,
+  },
+
+
+  // =======================================================
+  // ACTIVE ACTIONS
+  // =======================================================
+
+  activeActions: {
+    flexDirection: 'row',
+
+    alignItems: 'center',
+
+    marginTop: 14,
+
+    gap: 9,
+  },
+
+  viewRequestButton: {
+    flex: 1,
+
+    minHeight: 45,
+
+    borderRadius: 13,
+
+    backgroundColor:
+      colors.accent,
+
+    flexDirection: 'row',
+
+    justifyContent: 'center',
+
+    alignItems: 'center',
+
+    gap: 7,
+  },
+
+  viewRequestText: {
+    fontFamily:
+      'InterBold',
+
+    fontSize: 11,
+
+    color:
+      colors.white,
+
+    letterSpacing: 0.3,
+  },
+
+  cancelRequestButton: {
+    minHeight: 45,
+
+    minWidth: 78,
+
+    paddingHorizontal: 14,
+
+    borderRadius: 13,
+
+    borderWidth: 1,
+
+    borderColor:
+      colors.danger,
+
+    backgroundColor:
+      colors.dangerLight,
+
+    justifyContent: 'center',
+
+    alignItems: 'center',
+  },
+
+  cancelRequestText: {
+    fontFamily:
+      'InterBold',
+
+    fontSize: 10,
+
+    color:
+      colors.danger,
+
+    letterSpacing: 0.3,
   },
 
 
@@ -1433,7 +2463,8 @@ const styles = StyleSheet.create({
   },
 
   assistanceTitle: {
-    fontFamily: 'InterBold',
+    fontFamily:
+      'InterBold',
 
     color:
       colors.white,
@@ -1444,9 +2475,11 @@ const styles = StyleSheet.create({
   },
 
   assistanceDescription: {
-    fontFamily: 'InterRegular',
+    fontFamily:
+      'InterRegular',
 
-    color: '#CBD5E1',
+    color:
+      '#CBD5E1',
 
     fontSize: 14,
 
@@ -1477,13 +2510,15 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
 
     justifyContent: 'center',
+
     alignItems: 'center',
 
     gap: 10,
   },
 
   requestButtonText: {
-    fontFamily: 'InterBold',
+    fontFamily:
+      'InterBold',
 
     color:
       colors.white,
@@ -1503,13 +2538,15 @@ const styles = StyleSheet.create({
 
     alignItems: 'flex-end',
 
-    justifyContent: 'space-between',
+    justifyContent:
+      'space-between',
 
     marginBottom: 13,
   },
 
   sectionTitle: {
-    fontFamily: 'InterBold',
+    fontFamily:
+      'InterBold',
 
     fontSize: 18,
 
@@ -1520,7 +2557,8 @@ const styles = StyleSheet.create({
   },
 
   sectionSubtitle: {
-    fontFamily: 'InterRegular',
+    fontFamily:
+      'InterRegular',
 
     fontSize: 12,
 
@@ -1531,7 +2569,8 @@ const styles = StyleSheet.create({
   },
 
   viewAll: {
-    fontFamily: 'InterBold',
+    fontFamily:
+      'InterBold',
 
     fontSize: 13,
 
@@ -1541,7 +2580,7 @@ const styles = StyleSheet.create({
 
 
   // =======================================================
-  // QUICK ASSISTANCE GRID
+  // QUICK ASSISTANCE
   // =======================================================
 
   grid: {
@@ -1549,7 +2588,8 @@ const styles = StyleSheet.create({
 
     flexWrap: 'wrap',
 
-    justifyContent: 'space-between',
+    justifyContent:
+      'space-between',
 
     marginBottom: 27,
   },
@@ -1567,6 +2607,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
 
     borderWidth: 1,
+
     borderColor:
       colors.border,
 
@@ -1589,7 +2630,8 @@ const styles = StyleSheet.create({
   },
 
   breakdownText: {
-    fontFamily: 'InterBold',
+    fontFamily:
+      'InterBold',
 
     fontSize: 12,
 
@@ -1599,7 +2641,7 @@ const styles = StyleSheet.create({
 
 
   // =======================================================
-  // RECENT SERVICE
+  // HISTORY
   // =======================================================
 
   historyCard: {
@@ -1615,6 +2657,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
 
     borderWidth: 1,
+
     borderColor:
       colors.border,
   },
@@ -1636,11 +2679,13 @@ const styles = StyleSheet.create({
 
   historyInfo: {
     flex: 1,
+
     minWidth: 0,
   },
 
   historyTitle: {
-    fontFamily: 'InterBold',
+    fontFamily:
+      'InterBold',
 
     fontSize: 14,
 
@@ -1649,7 +2694,8 @@ const styles = StyleSheet.create({
   },
 
   historyId: {
-    fontFamily: 'InterRegular',
+    fontFamily:
+      'InterRegular',
 
     fontSize: 11,
 
@@ -1678,7 +2724,8 @@ const styles = StyleSheet.create({
   },
 
   statusText: {
-    fontFamily: 'InterBold',
+    fontFamily:
+      'InterBold',
 
     color:
       colors.success,
@@ -1694,7 +2741,7 @@ const styles = StyleSheet.create({
 
 
   // =======================================================
-  // EMPTY / LOADING CARD
+  // EMPTY HISTORY
   // =======================================================
 
   emptyHistoryCard: {
@@ -1712,6 +2759,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
 
     borderWidth: 1,
+
     borderColor:
       colors.border,
   },
@@ -1732,7 +2780,8 @@ const styles = StyleSheet.create({
   },
 
   emptyHistoryText: {
-    fontFamily: 'InterRegular',
+    fontFamily:
+      'InterRegular',
 
     fontSize: 12,
 

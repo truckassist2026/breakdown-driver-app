@@ -8,7 +8,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 
-import colors from '../../constants/colors';
+import colors from '../../../constants/colors';
 
 export default function AssignedScreen() {
   const router = useRouter();

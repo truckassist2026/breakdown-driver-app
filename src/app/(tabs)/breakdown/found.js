@@ -10,7 +10,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 
-import colors from '../../constants/colors';
+import colors from '../../../constants/colors';
 
 export default function FoundScreen() {
   const router = useRouter();

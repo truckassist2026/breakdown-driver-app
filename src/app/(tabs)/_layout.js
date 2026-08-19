@@ -1,15 +1,9 @@
-import {
-  Tabs,
-} from 'expo-router';
-
-import {
-  Ionicons,
-} from '@expo/vector-icons';
+import { Ionicons } from '@expo/vector-icons';
+import { Tabs } from 'expo-router';
 
 import colors from '../../constants/colors';
 
 export default function TabsLayout() {
-
   return (
     <Tabs
       screenOptions={{
@@ -22,46 +16,24 @@ export default function TabsLayout() {
           colors.textMuted,
 
         tabBarStyle: {
-          height: 72,
-
-          paddingTop: 8,
-
-          paddingBottom: 10,
-
-          backgroundColor:
-            colors.white,
-
+          height: 68,
+          paddingTop: 7,
+          paddingBottom: 8,
+          backgroundColor: colors.white,
           borderTopWidth: 1,
-
-          borderTopColor:
-            colors.borderLight,
-
-          elevation: 8,
-
-          shadowOpacity: 0.08,
-
-          shadowRadius: 10,
-
-          shadowOffset: {
-            width: 0,
-            height: -3,
-          },
+          borderTopColor: colors.borderLight,
         },
 
         tabBarLabelStyle: {
-          fontFamily:
-            'InterSemiBold',
-
-          fontSize: 9,
-
-          marginTop: 2,
-        },
-
-        tabBarIconStyle: {
-          marginBottom: -1,
+          fontFamily: 'InterMedium',
+          fontSize: 10,
         },
       }}
     >
+
+      {/* =====================================================
+          HOME
+          ===================================================== */}
 
       <Tabs.Screen
         name="home"
@@ -70,20 +42,21 @@ export default function TabsLayout() {
 
           tabBarIcon: ({
             color,
-            focused,
+            size,
           }) => (
             <Ionicons
-              name={
-                focused
-                  ? 'home'
-                  : 'home-outline'
-              }
-              size={22}
+              name="home-outline"
+              size={size}
               color={color}
             />
           ),
         }}
       />
+
+
+      {/* =====================================================
+          REQUESTS
+          ===================================================== */}
 
       <Tabs.Screen
         name="requests"
@@ -92,20 +65,21 @@ export default function TabsLayout() {
 
           tabBarIcon: ({
             color,
-            focused,
+            size,
           }) => (
             <Ionicons
-              name={
-                focused
-                  ? 'document-text'
-                  : 'document-text-outline'
-              }
-              size={22}
+              name="document-text-outline"
+              size={size}
               color={color}
             />
           ),
         }}
       />
+
+
+      {/* =====================================================
+          VEHICLE
+          ===================================================== */}
 
       <Tabs.Screen
         name="vehicle"
@@ -114,20 +88,21 @@ export default function TabsLayout() {
 
           tabBarIcon: ({
             color,
-            focused,
+            size,
           }) => (
             <Ionicons
-              name={
-                focused
-                  ? 'car-sport'
-                  : 'car-sport-outline'
-              }
-              size={23}
+              name="car-outline"
+              size={size}
               color={color}
             />
           ),
         }}
       />
+
+
+      {/* =====================================================
+          PROFILE
+          ===================================================== */}
 
       <Tabs.Screen
         name="profile"
@@ -136,18 +111,29 @@ export default function TabsLayout() {
 
           tabBarIcon: ({
             color,
-            focused,
+            size,
           }) => (
             <Ionicons
-              name={
-                focused
-                  ? 'person'
-                  : 'person-outline'
-              }
-              size={22}
+              name="person-outline"
+              size={size}
               color={color}
             />
           ),
+        }}
+      />
+
+
+      {/* =====================================================
+          BREAKDOWN FLOW
+          
+          Internal navigation only.
+          DO NOT SHOW IN BOTTOM NAVIGATION.
+          ===================================================== */}
+
+      <Tabs.Screen
+        name="breakdown"
+        options={{
+          href: null,
         }}
       />
 

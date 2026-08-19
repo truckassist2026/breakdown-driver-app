@@ -22,9 +22,19 @@ import {
 } from '@expo-google-fonts/inter';
 
 import {
+  View,
+} from 'react-native';
+
+import {
+  SafeAreaProvider,
+  SafeAreaView,
+} from 'react-native-safe-area-context';
+
+import {
   AuthProvider,
   useAuth,
 } from '../context/AuthContext';
+
 
 // =========================================================
 // KEEP SPLASH SCREEN WHILE LOADING
@@ -32,11 +42,13 @@ import {
 
 SplashScreen.preventAutoHideAsync();
 
+
 // =========================================================
 // ROUTE GUARD
 // =========================================================
 
 function RootNavigator() {
+
   const router =
     useRouter();
 
@@ -48,24 +60,30 @@ function RootNavigator() {
     isAuthenticated,
   } = useAuth();
 
+
   // =======================================================
   // AUTH ROUTING
   // =======================================================
 
   useEffect(() => {
+
     if (loading) {
       return;
     }
 
+
     const firstSegment =
       segments[0];
+
 
     const isAuthScreen =
       firstSegment === 'login' ||
       firstSegment === 'otp';
 
+
     const isTabsScreen =
       firstSegment === '(tabs)';
+
 
     // =====================================================
     // NOT AUTHENTICATED
@@ -75,6 +93,7 @@ function RootNavigator() {
       !isAuthenticated &&
       isTabsScreen
     ) {
+
       console.log(
         '[Router] No session → Login'
       );
@@ -86,6 +105,7 @@ function RootNavigator() {
       return;
     }
 
+
     // =====================================================
     // AUTHENTICATED
     // =====================================================
@@ -94,6 +114,7 @@ function RootNavigator() {
       isAuthenticated &&
       isAuthScreen
     ) {
+
       console.log(
         '[Router] Session exists → Home'
       );
@@ -111,6 +132,7 @@ function RootNavigator() {
     segments,
   ]);
 
+
   // =======================================================
   // WAIT FOR AUTH RESTORE
   // =======================================================
@@ -119,11 +141,18 @@ function RootNavigator() {
     return null;
   }
 
+
   return (
-    <>
-      <StatusBar
-        style="dark"
-      />
+    <SafeAreaView
+      style={{
+        flex: 1,
+        backgroundColor: '#F8FAFC',
+      }}
+      edges={[
+        'top',
+        'bottom',
+      ]}
+    >
 
       <Stack
         screenOptions={{
@@ -138,6 +167,7 @@ function RootNavigator() {
           },
         }}
       >
+
         <Stack.Screen
           name="index"
         />
@@ -153,19 +183,24 @@ function RootNavigator() {
         <Stack.Screen
           name="(tabs)"
         />
+
       </Stack>
-    </>
+
+    </SafeAreaView>
   );
 }
+
 
 // =========================================================
 // ROOT LAYOUT
 // =========================================================
 
 export default function RootLayout() {
+
   const [
     fontsLoaded,
   ] = useFonts({
+
     InterRegular:
       Inter_400Regular,
 
@@ -179,29 +214,49 @@ export default function RootLayout() {
       Inter_700Bold,
   });
 
+
   // =======================================================
   // HIDE SPLASH
   // =======================================================
 
   useEffect(() => {
+
     if (fontsLoaded) {
+
       SplashScreen.hideAsync();
+
     }
+
   }, [
     fontsLoaded,
   ]);
+
 
   // =======================================================
   // WAIT FOR FONTS
   // =======================================================
 
   if (!fontsLoaded) {
+
     return null;
   }
 
+
   return (
-    <AuthProvider>
-      <RootNavigator />
-    </AuthProvider>
+
+    <SafeAreaProvider>
+
+      <AuthProvider>
+
+        <StatusBar
+          style="dark"
+          translucent={false}
+        />
+
+        <RootNavigator />
+
+      </AuthProvider>
+
+    </SafeAreaProvider>
   );
 }

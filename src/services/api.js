@@ -1,7 +1,8 @@
 import { getToken } from '../utils/authStorage';
 
 const API_BASE_URL =
-  'http://192.168.1.15:8080';
+  process.env.EXPO_PUBLIC_API_URL ||
+  'https://truck-assist-backend.onrender.com';
 
 export async function apiRequest(
   endpoint,
@@ -44,9 +45,7 @@ export async function apiRequest(
         body:
           options.body &&
           typeof options.body !== 'string'
-            ? JSON.stringify(
-                options.body
-              )
+            ? JSON.stringify(options.body)
             : options.body,
       }
     );
@@ -86,7 +85,8 @@ export async function apiRequest(
     error.status =
       response.status;
 
-    error.data = data;
+    error.data =
+      data;
 
     throw error;
   }

@@ -25,11 +25,11 @@ import {
     useRouter,
 } from 'expo-router';
 
-import colors from '../../constants/colors';
+import colors from '../../../constants/colors';
 
 import {
     apiRequest,
-} from '../../services/api';
+} from '../../../services/api';
 
 
 // =========================================================

@@ -1,209 +1,39 @@
-import {
-    useCallback,
-    useEffect,
-    useState,
-} from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import {
-    ActivityIndicator,
-    RefreshControl,
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  ActivityIndicator,
+  Alert,
+  RefreshControl,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 
 import { Ionicons } from '@expo/vector-icons';
-
-import {
-    useLocalSearchParams,
-    useRouter,
-} from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import colors from '../../constants/colors';
 
 import {
-    cancelServiceRequest,
-    getServiceRequestById,
-    getServiceRequestHistory,
+  cancelServiceRequest,
+  getServiceRequestById,
+  getServiceRequestHistory,
 } from '../../services/requestService';
 
 
 // =========================================================
-// STATUS CONFIG
+// HELPERS
 // =========================================================
 
-function getStatusConfig(status) {
-
-  switch (status) {
-
-    case 'CREATED':
-      return {
-        label: 'Request Created',
-        icon: 'document-text-outline',
-        color: colors.info,
-        background: colors.infoLight,
-      };
-
-    case 'SEARCHING':
-      return {
-        label: 'Finding Mechanic',
-        icon: 'search-outline',
-        color: colors.accent,
-        background: colors.accentLight,
-      };
-
-    case 'ASSIGNED':
-      return {
-        label: 'Mechanic Assigned',
-        icon: 'person-outline',
-        color: colors.info,
-        background: colors.infoLight,
-      };
-
-    case 'MECHANIC_EN_ROUTE':
-      return {
-        label: 'Mechanic On The Way',
-        icon: 'navigate-outline',
-        color: colors.accent,
-        background: colors.accentLight,
-      };
-
-    case 'ARRIVED':
-      return {
-        label: 'Mechanic Arrived',
-        icon: 'location-outline',
-        color: colors.success,
-        background: colors.successLight,
-      };
-
-    case 'IN_PROGRESS':
-      return {
-        label: 'Service In Progress',
-        icon: 'construct-outline',
-        color: colors.info,
-        background: colors.infoLight,
-      };
-
-    case 'PAYMENT_PENDING':
-      return {
-        label: 'Payment Pending',
-        icon: 'card-outline',
-        color: colors.warning,
-        background: colors.warningLight,
-      };
-
-    case 'COMPLETED':
-      return {
-        label: 'Completed',
-        icon: 'checkmark-circle-outline',
-        color: colors.success,
-        background: colors.successLight,
-      };
-
-    case 'CANCELLED':
-      return {
-        label: 'Cancelled',
-        icon: 'close-circle-outline',
-        color: colors.danger,
-        background: colors.dangerLight,
-      };
-
-    default:
-      return {
-        label: status || 'Unknown',
-        icon: 'help-circle-outline',
-        color: colors.textMuted,
-        background: colors.background,
-      };
-  }
-}
-
-
-// =========================================================
-// CATEGORY
-// =========================================================
-
-function getCategoryConfig(category) {
-
-  switch (category) {
-
-    case 'TYRE':
-      return {
-        title: 'Tyre Assistance',
-        icon: 'speedometer-outline',
-      };
-
-    case 'BATTERY':
-      return {
-        title: 'Battery Assistance',
-        icon: 'battery-half-outline',
-      };
-
-    case 'FUEL':
-      return {
-        title: 'Fuel Assistance',
-        icon: 'flame-outline',
-      };
-
-    case 'BREAKDOWN':
-      return {
-        title: 'Breakdown Assistance',
-        icon: 'construct-outline',
-      };
-
-    case 'ELECTRICAL':
-      return {
-        title: 'Electrical Assistance',
-        icon: 'flash-outline',
-      };
-
-    case 'TOWING':
-      return {
-        title: 'Towing Assistance',
-        icon: 'car-outline',
-      };
-
-    case 'OTHER':
-      return {
-        title: 'Other Assistance',
-        icon: 'ellipsis-horizontal-circle-outline',
-      };
-
-    default:
-      return {
-        title: category || 'Service Request',
-        icon: 'construct-outline',
-      };
-  }
-}
-
-
-// =========================================================
-// DATE
-// =========================================================
-
-function formatDate(dateValue) {
-
-  if (!dateValue) {
-    return 'Not available';
+function formatDate(value) {
+  if (!value) {
+    return '—';
   }
 
   try {
-
-    const date =
-      new Date(dateValue);
-
-    if (
-      Number.isNaN(
-        date.getTime()
-      )
-    ) {
-      return 'Not available';
-    }
-
-    return date.toLocaleDateString(
+    return new Date(value).toLocaleDateString(
       'en-IN',
       {
         day: '2-digit',
@@ -211,54 +41,236 @@ function formatDate(dateValue) {
         year: 'numeric',
       }
     );
-
-  } catch (error) {
-
-    return 'Not available';
+  } catch {
+    return '—';
   }
 }
 
 
-// =========================================================
-// TIME
-// =========================================================
-
-function formatTime(dateValue) {
-
-  if (!dateValue) {
-    return '';
+function formatTime(value) {
+  if (!value) {
+    return '—';
   }
 
   try {
-
-    const date =
-      new Date(dateValue);
-
-    if (
-      Number.isNaN(
-        date.getTime()
-      )
-    ) {
-      return '';
-    }
-
-    return date.toLocaleTimeString(
+    return new Date(value).toLocaleTimeString(
       'en-IN',
       {
         hour: '2-digit',
         minute: '2-digit',
       }
     );
-
-  } catch (error) {
-
-    return '';
+  } catch {
+    return '—';
   }
 }
 
 
+function formatDateTime(value) {
+  if (!value) {
+    return '—';
+  }
+
+  const date = formatDate(value);
+  const time = formatTime(value);
+
+  return `${date} ${time}`;
+}
+
+
+function getCategoryLabel(category) {
+  const map = {
+    BREAKDOWN: 'Breakdown',
+    TYRE: 'Tyre Issue',
+    BATTERY: 'Battery Issue',
+    FUEL: 'Fuel Issue',
+    OTHER: 'Other',
+  };
+
+  return map[category] || category || 'Service Request';
+}
+
+
+function getCategoryIcon(category) {
+  const map = {
+    BREAKDOWN: 'warning-outline',
+    TYRE: 'disc-outline',
+    BATTERY: 'battery-half-outline',
+    FUEL: 'water-outline',
+    OTHER: 'construct-outline',
+  };
+
+  return map[category] || 'construct-outline';
+}
+
+
+function getStatusLabel(status) {
+  const map = {
+    CREATED: 'Created',
+    SEARCHING: 'Searching',
+    ASSIGNED: 'Mechanic Assigned',
+    EN_ROUTE: 'Mechanic On The Way',
+    ARRIVED: 'Mechanic Arrived',
+    IN_PROGRESS: 'Service In Progress',
+    COMPLETED: 'Completed',
+    CANCELLED: 'Cancelled',
+  };
+
+  return map[status] || status || 'Unknown';
+}
+
+
+function getStatusIcon(status) {
+  const map = {
+    CREATED: 'add-circle-outline',
+    SEARCHING: 'search-outline',
+    ASSIGNED: 'person-outline',
+    EN_ROUTE: 'navigate-outline',
+    ARRIVED: 'location-outline',
+    IN_PROGRESS: 'construct-outline',
+    COMPLETED: 'checkmark-circle-outline',
+    CANCELLED: 'close-circle-outline',
+  };
+
+  return map[status] || 'ellipse-outline';
+}
+
+
+function isTerminalStatus(status) {
+  return (
+    status === 'COMPLETED' ||
+    status === 'CANCELLED'
+  );
+}
+
+
 // =========================================================
-// REQUEST DETAILS SCREEN
+// SMALL COMPONENTS
+// =========================================================
+
+function InfoRow({
+  icon,
+  label,
+  value,
+}) {
+  return (
+    <View style={styles.infoRow}>
+
+      <View style={styles.infoIcon}>
+        <Ionicons
+          name={icon}
+          size={18}
+          color={colors.accent}
+        />
+      </View>
+
+      <View style={styles.infoTextContainer}>
+
+        <Text style={styles.infoLabel}>
+          {label}
+        </Text>
+
+        <Text style={styles.infoValue}>
+          {value || '—'}
+        </Text>
+
+      </View>
+
+    </View>
+  );
+}
+
+
+function SectionCard({
+  title,
+  icon,
+  children,
+}) {
+  return (
+    <View style={styles.sectionCard}>
+
+      <View style={styles.sectionHeader}>
+
+        <View style={styles.sectionHeaderIcon}>
+          <Ionicons
+            name={icon}
+            size={18}
+            color={colors.accent}
+          />
+        </View>
+
+        <Text style={styles.sectionTitle}>
+          {title}
+        </Text>
+
+      </View>
+
+      {children}
+
+    </View>
+  );
+}
+
+
+function StatusBadge({
+  status,
+}) {
+  const completed =
+    status === 'COMPLETED';
+
+  const cancelled =
+    status === 'CANCELLED';
+
+  const assigned =
+    status === 'ASSIGNED';
+
+  let backgroundColor =
+    '#F1F5F9';
+
+  let textColor =
+    '#475569';
+
+  if (completed) {
+    backgroundColor = '#DCFCE7';
+    textColor = '#166534';
+  }
+
+  if (cancelled) {
+    backgroundColor = '#FEE2E2';
+    textColor = '#991B1B';
+  }
+
+  if (assigned) {
+    backgroundColor = '#DBEAFE';
+    textColor = '#1D4ED8';
+  }
+
+  return (
+    <View
+      style={[
+        styles.statusBadge,
+        {
+          backgroundColor,
+        },
+      ]}
+    >
+      <Text
+        style={[
+          styles.statusBadgeText,
+          {
+            color: textColor,
+          },
+        ]}
+      >
+        {getStatusLabel(status)}
+      </Text>
+    </View>
+  );
+}
+
+
+// =========================================================
+// MAIN SCREEN
 // =========================================================
 
 export default function RequestDetailsScreen() {
@@ -266,19 +278,17 @@ export default function RequestDetailsScreen() {
   const router =
     useRouter();
 
-  const {
-    id,
-  } = useLocalSearchParams();
+  const params =
+    useLocalSearchParams();
+
+  const rawId =
+    params?.id;
 
   const requestId =
-    Array.isArray(id)
-      ? id[0]
-      : id;
+    Array.isArray(rawId)
+      ? rawId[0]
+      : rawId;
 
-
-  // =======================================================
-  // STATE
-  // =======================================================
 
   const [
     request,
@@ -301,18 +311,51 @@ export default function RequestDetailsScreen() {
   ] = useState(false);
 
   const [
-    error,
-    setError,
-  ] = useState(null);
-
-  const [
     cancelling,
     setCancelling,
   ] = useState(false);
 
+  const [
+    error,
+    setError,
+  ] = useState(null);
+
 
   // =======================================================
-  // LOAD REQUEST
+  // SAFE BACK
+  // =======================================================
+
+  const handleBack =
+    useCallback(() => {
+
+      try {
+
+        if (
+          typeof router.canGoBack === 'function' &&
+          router.canGoBack()
+        ) {
+          router.back();
+          return;
+        }
+
+        router.replace('/');
+
+      } catch (navigationError) {
+
+        console.log(
+          '[DRIVER REQUEST] Back navigation error:',
+          navigationError
+        );
+
+        router.replace('/');
+
+      }
+
+    }, [router]);
+
+
+  // =======================================================
+  // LOAD DATA
   // =======================================================
 
   const loadRequest =
@@ -324,7 +367,7 @@ export default function RequestDetailsScreen() {
         if (!requestId) {
 
           setError(
-            'Invalid service request'
+            'Request ID is missing.'
           );
 
           setLoading(false);
@@ -342,38 +385,50 @@ export default function RequestDetailsScreen() {
 
           setError(null);
 
+          console.log(
+            '[DRIVER REQUEST] Loading request:',
+            requestId
+          );
+
+          console.log(
+            '[DRIVER REQUEST] Loading history:',
+            requestId
+          );
 
           const [
             requestResponse,
             historyResponse,
-          ] = await Promise.all([
-
-            getServiceRequestById(
-              requestId
-            ),
-
-            getServiceRequestHistory(
-              requestId
-            ),
-
-          ]);
-
+          ] =
+            await Promise.all([
+              getServiceRequestById(
+                requestId
+              ),
+              getServiceRequestHistory(
+                requestId
+              ),
+            ]);
 
           console.log(
-            '[Truck Assist] Request:',
-            requestResponse
+            '[DRIVER REQUEST] Request details:',
+            JSON.stringify(
+              requestResponse,
+              null,
+              2
+            )
           );
 
           console.log(
-            '[Truck Assist] Request history:',
-            historyResponse
+            '[DRIVER REQUEST] History:',
+            JSON.stringify(
+              historyResponse,
+              null,
+              2
+            )
           );
-
 
           setRequest(
-            requestResponse
+            requestResponse || null
           );
-
 
           setHistory(
             Array.isArray(
@@ -383,89 +438,155 @@ export default function RequestDetailsScreen() {
               : []
           );
 
-        } catch (err) {
+        } catch (loadError) {
 
           console.error(
-            'Unable to load request details:',
-            err
+            '[DRIVER REQUEST] Load error:',
+            loadError
           );
 
+          setRequest(null);
+
+          setHistory([]);
+
           setError(
-            err?.message ||
-            'Unable to load request details'
+            loadError?.message ||
+            'Unable to load request details.'
           );
 
         } finally {
 
           setLoading(false);
-
           setRefreshing(false);
+
         }
 
       },
-      [
-        requestId,
-      ]
+      [requestId]
     );
 
-
-  // =======================================================
-  // INITIAL LOAD
-  // =======================================================
 
   useEffect(() => {
 
     loadRequest();
 
-  }, [
-    loadRequest,
-  ]);
+  }, [loadRequest]);
 
 
   // =======================================================
-  // CANCEL REQUEST
+  // CANCEL
   // =======================================================
 
   const handleCancel =
-    async () => {
+    useCallback(() => {
 
       if (!requestId) {
         return;
       }
 
-      if (cancelling) {
+      if (
+        cancelling ||
+        isTerminalStatus(
+          request?.status
+        )
+      ) {
         return;
       }
 
-      try {
+      Alert.alert(
+        'Cancel Request',
+        'Are you sure you want to cancel this service request?',
+        [
+          {
+            text: 'No',
+            style: 'cancel',
+          },
+          {
+            text: 'Yes, Cancel',
+            style: 'destructive',
+            onPress: async () => {
 
-        setCancelling(true);
+              try {
 
-        await cancelServiceRequest(
-          requestId
-        );
+                setCancelling(true);
 
-        await loadRequest({
-          refresh: true,
-        });
+                console.log(
+                  '[DRIVER REQUEST] Cancelling:',
+                  requestId
+                );
 
-      } catch (err) {
+                const response =
+                  await cancelServiceRequest(
+                    requestId
+                  );
 
-        console.error(
-          'Unable to cancel request:',
-          err
-        );
+                console.log(
+                  '[DRIVER REQUEST] Cancel response:',
+                  JSON.stringify(
+                    response,
+                    null,
+                    2
+                  )
+                );
 
-        setError(
-          err?.message ||
-          'Unable to cancel request'
-        );
+                await loadRequest({
+                  refresh: true,
+                });
 
-      } finally {
+              } catch (cancelError) {
 
-        setCancelling(false);
-      }
-    };
+                console.error(
+                  '[DRIVER REQUEST] Cancel error:',
+                  cancelError
+                );
+
+                Alert.alert(
+                  'Unable to Cancel',
+                  cancelError?.message ||
+                  'Unable to cancel the request.'
+                );
+
+              } finally {
+
+                setCancelling(false);
+
+              }
+
+            },
+          },
+        ]
+      );
+
+    }, [
+      requestId,
+      request?.status,
+      cancelling,
+      loadRequest,
+    ]);
+
+
+  // =======================================================
+  // DERIVED DATA
+  // =======================================================
+
+  const categoryLabel =
+    useMemo(
+      () =>
+        getCategoryLabel(
+          request?.category
+        ),
+      [request?.category]
+    );
+
+
+  const categoryIcon =
+    useMemo(
+      () =>
+        getCategoryIcon(
+          request?.category
+        ),
+      [request?.category]
+    );
 
 
   // =======================================================
@@ -475,58 +596,39 @@ export default function RequestDetailsScreen() {
   if (loading) {
 
     return (
+      <View style={styles.container}>
 
-      <View
-        style={styles.container}
-      >
-
-        <View
-          style={styles.topBar}
-        >
+        <View style={styles.simpleTopBar}>
 
           <TouchableOpacity
             style={styles.backButton}
-            onPress={() =>
-              router.back()
-            }
+            activeOpacity={0.8}
+            onPress={handleBack}
           >
-
             <Ionicons
               name="arrow-back"
               size={22}
               color={colors.text}
             />
-
           </TouchableOpacity>
 
-
-          <Text
-            style={styles.topBarTitle}
-          >
+          <Text style={styles.topBarTitle}>
             Request Details
           </Text>
 
-
-          <View
-            style={styles.topBarSpacer}
-          />
+          <View style={styles.topBarSpacer} />
 
         </View>
 
-
-        <View
-          style={styles.loadingContainer}
-        >
+        <View style={styles.centerContent}>
 
           <ActivityIndicator
-            size="large"
+            size="small"
             color={colors.accent}
           />
 
-          <Text
-            style={styles.loadingText}
-          >
-            Loading request...
+          <Text style={styles.centerText}>
+            Loading request details...
           </Text>
 
         </View>
@@ -537,84 +639,62 @@ export default function RequestDetailsScreen() {
 
 
   // =======================================================
-  // ERROR
+  // ERROR / NOT FOUND
   // =======================================================
 
-  if (error && !request) {
+  if (
+    error ||
+    !request
+  ) {
 
     return (
+      <View style={styles.container}>
 
-      <View
-        style={styles.container}
-      >
-
-        <View
-          style={styles.topBar}
-        >
+        <View style={styles.simpleTopBar}>
 
           <TouchableOpacity
             style={styles.backButton}
-            onPress={() =>
-              router.back()
-            }
+            activeOpacity={0.8}
+            onPress={handleBack}
           >
-
             <Ionicons
               name="arrow-back"
               size={22}
               color={colors.text}
             />
-
           </TouchableOpacity>
 
-
-          <Text
-            style={styles.topBarTitle}
-          >
+          <Text style={styles.topBarTitle}>
             Request Details
           </Text>
 
-
-          <View
-            style={styles.topBarSpacer}
-          />
+          <View style={styles.topBarSpacer} />
 
         </View>
 
+        <View style={styles.centerContent}>
 
-        <View
-          style={styles.errorContainer}
-        >
-
-          <View
-            style={styles.errorIcon}
-          >
+          <View style={styles.errorIcon}>
 
             <Ionicons
               name="alert-circle-outline"
-              size={32}
-              color={colors.danger}
+              size={42}
+              color={colors.accent}
             />
 
           </View>
 
-
-          <Text
-            style={styles.errorTitle}
-          >
-            Unable to load request
+          <Text style={styles.errorTitle}>
+            Request not found
           </Text>
 
-
-          <Text
-            style={styles.errorMessage}
-          >
-            {error}
+          <Text style={styles.errorText}>
+            {error || 'Unable to load this service request.'}
           </Text>
-
 
           <TouchableOpacity
             style={styles.retryButton}
+            activeOpacity={0.85}
             onPress={() =>
               loadRequest()
             }
@@ -626,9 +706,7 @@ export default function RequestDetailsScreen() {
               color={colors.white}
             />
 
-            <Text
-              style={styles.retryText}
-            >
+            <Text style={styles.retryButtonText}>
               Try Again
             </Text>
 
@@ -642,98 +720,38 @@ export default function RequestDetailsScreen() {
 
 
   // =======================================================
-  // SAFETY
-  // =======================================================
-
-  if (!request) {
-    return null;
-  }
-
-
-  // =======================================================
-  // CONFIG
-  // =======================================================
-
-  const category =
-    getCategoryConfig(
-      request.category
-    );
-
-  const status =
-    getStatusConfig(
-      request.status
-    );
-
-
-  // =======================================================
-  // CAN CANCEL
-  // =======================================================
-
-  const canCancel =
-    ![
-      'COMPLETED',
-      'CANCELLED',
-      'IN_PROGRESS',
-      'PAYMENT_PENDING',
-    ].includes(
-      request.status
-    );
-
-
-  // =======================================================
-  // RENDER
+  // MAIN RENDER
   // =======================================================
 
   return (
+    <View style={styles.container}>
 
-    <View
-      style={styles.container}
-    >
-
-      {/* =================================================
-          TOP BAR
-          ================================================= */}
-
-      <View
-        style={styles.topBar}
-      >
+      <View style={styles.simpleTopBar}>
 
         <TouchableOpacity
           style={styles.backButton}
           activeOpacity={0.8}
-          onPress={() =>
-            router.back()
-          }
+          onPress={handleBack}
         >
-
           <Ionicons
             name="arrow-back"
             size={22}
             color={colors.text}
           />
-
         </TouchableOpacity>
 
-
-        <Text
-          style={styles.topBarTitle}
-        >
+        <Text style={styles.topBarTitle}>
           Request Details
         </Text>
 
-
-        <View
-          style={styles.topBarSpacer}
-        />
+        <View style={styles.topBarSpacer} />
 
       </View>
 
 
       <ScrollView
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={
-          styles.content
-        }
+        contentContainerStyle={styles.content}
         refreshControl={
           <RefreshControl
             refreshing={refreshing}
@@ -742,114 +760,82 @@ export default function RequestDetailsScreen() {
                 refresh: true,
               })
             }
-            tintColor={
-              colors.accent
-            }
+            tintColor={colors.accent}
           />
         }
       >
 
         {/* =================================================
-            MAIN REQUEST CARD
-            ================================================= */}
+            REQUEST HERO
+        ================================================= */}
 
-        <View
-          style={styles.heroCard}
-        >
+        <View style={styles.heroCard}>
 
-          <View
-            style={styles.heroTop}
-          >
+          <View style={styles.heroTop}>
 
-            <View
-              style={styles.categoryIcon}
-            >
+            <View style={styles.categoryIcon}>
 
               <Ionicons
-                name={category.icon}
-                size={29}
+                name={categoryIcon}
+                size={26}
                 color={colors.accent}
               />
 
             </View>
 
+            <View style={styles.heroText}>
 
-            <View
-              style={styles.heroInfo}
-            >
-
-              <Text
-                style={styles.categoryTitle}
-              >
-                {category.title}
+              <Text style={styles.categoryLabel}>
+                {categoryLabel}
               </Text>
 
+              <Text style={styles.requestIdLabel}>
+                Request ID
+              </Text>
 
               <Text
                 style={styles.requestId}
+                numberOfLines={1}
               >
-                #{String(
-                  request.id
-                ).slice(0, 8)}
+                {request.id}
               </Text>
 
             </View>
+
+            <StatusBadge
+              status={request.status}
+            />
 
           </View>
 
+          <View style={styles.heroDivider} />
 
-          {/* STATUS */}
+          <View style={styles.heroMeta}>
 
-          <View
-            style={[
-              styles.currentStatus,
-              {
-                backgroundColor:
-                  status.background,
-              },
-            ]}
-          >
-
-            <View
-              style={[
-                styles.statusIcon,
-                {
-                  backgroundColor:
-                    status.color,
-                },
-              ]}
-            >
+            <View style={styles.metaItem}>
 
               <Ionicons
-                name={status.icon}
-                size={18}
-                color={colors.white}
+                name="calendar-outline"
+                size={16}
+                color={colors.textMuted}
               />
+
+              <Text style={styles.metaText}>
+                {formatDate(request.createdAt)}
+              </Text>
 
             </View>
 
+            <View style={styles.metaItem}>
 
-            <View
-              style={styles.statusInfo}
-            >
+              <Ionicons
+                name="time-outline"
+                size={16}
+                color={colors.textMuted}
+              />
 
-              <Text
-                style={styles.statusLabel}
-              >
-                CURRENT STATUS
-              </Text>
-
-
-              <Text
-                style={[
-                  styles.statusValue,
-                  {
-                    color:
-                      status.color,
-                  },
-                ]}
-              >
-                {status.label}
+              <Text style={styles.metaText}>
+                {formatTime(request.createdAt)}
               </Text>
 
             </View>
@@ -861,523 +847,269 @@ export default function RequestDetailsScreen() {
 
         {/* =================================================
             REQUEST INFORMATION
-            ================================================= */}
+        ================================================= */}
 
-        <Text
-          style={styles.sectionTitle}
-        >
-          Request Information
-        </Text>
-
-
-        <View
-          style={styles.infoCard}
+        <SectionCard
+          title="Request Information"
+          icon="document-text-outline"
         >
 
-          {/* DATE */}
-
-          <View
-            style={styles.infoRow}
-          >
-
-            <View
-              style={styles.infoIcon}
-            >
-
-              <Ionicons
-                name="calendar-outline"
-                size={19}
-                color={colors.accent}
-              />
-
-            </View>
-
-
-            <View
-              style={styles.infoContent}
-            >
-
-              <Text
-                style={styles.infoLabel}
-              >
-                REQUESTED ON
-              </Text>
-
-
-              <Text
-                style={styles.infoValue}
-              >
-                {formatDate(
-                  request.createdAt
-                )}
-
-                {request.createdAt
-                  ? ` • ${formatTime(
-                      request.createdAt
-                    )}`
-                  : ''}
-              </Text>
-
-            </View>
-
-          </View>
-
-
-          <View
-            style={styles.rowDivider}
+          <InfoRow
+            icon="construct-outline"
+            label="Service"
+            value={categoryLabel}
           />
 
-
-          {/* VEHICLE */}
-
-          <View
-            style={styles.infoRow}
-          >
-
-            <View
-              style={styles.infoIcon}
-            >
-
-              <Ionicons
-                name="car-outline"
-                size={19}
-                color={colors.accent}
-              />
-
-            </View>
-
-
-            <View
-              style={styles.infoContent}
-            >
-
-              <Text
-                style={styles.infoLabel}
-              >
-                VEHICLE
-              </Text>
-
-
-              <Text
-                style={styles.infoValue}
-              >
-                {request.vehicleId
-                  ? String(
-                      request.vehicleId
-                    ).slice(0, 8)
-                  : 'Vehicle information unavailable'}
-              </Text>
-
-            </View>
-
-          </View>
-
-
-          <View
-            style={styles.rowDivider}
+          <InfoRow
+            icon="flag-outline"
+            label="Status"
+            value={getStatusLabel(request.status)}
           />
 
+          <InfoRow
+            icon="location-outline"
+            label="Location"
+            value={request.address}
+          />
 
-          {/* LOCATION */}
+          <InfoRow
+            icon="navigate-outline"
+            label="Latitude"
+            value={
+              request.latitude !== null &&
+              request.latitude !== undefined
+                ? String(request.latitude)
+                : '—'
+            }
+          />
 
-          <View
-            style={styles.infoRow}
-          >
+          <InfoRow
+            icon="navigate-outline"
+            label="Longitude"
+            value={
+              request.longitude !== null &&
+              request.longitude !== undefined
+                ? String(request.longitude)
+                : '—'
+            }
+          />
 
-            <View
-              style={styles.infoIcon}
-            >
+          <InfoRow
+            icon="calendar-outline"
+            label="Created"
+            value={
+              formatDateTime(
+                request.createdAt
+              )
+            }
+          />
 
-              <Ionicons
-                name="location-outline"
-                size={19}
-                color={colors.accent}
-              />
-
-            </View>
-
-
-            <View
-              style={styles.infoContent}
-            >
-
-              <Text
-                style={styles.infoLabel}
-              >
-                LOCATION
-              </Text>
-
-
-              <Text
-                style={styles.infoValue}
-              >
-                {request.address ||
-                  'Address not available'}
-              </Text>
-
-            </View>
-
-          </View>
-
-
-          {/* COORDINATES */}
-
-          {(
-            request.latitude != null &&
-            request.longitude != null
-          ) && (
-
-            <>
-
-              <View
-                style={styles.rowDivider}
-              />
-
-              <View
-                style={styles.infoRow}
-              >
-
-                <View
-                  style={styles.infoIcon}
-                >
-
-                  <Ionicons
-                    name="navigate-outline"
-                    size={19}
-                    color={colors.accent}
-                  />
-
-                </View>
-
-
-                <View
-                  style={styles.infoContent}
-                >
-
-                  <Text
-                    style={styles.infoLabel}
-                  >
-                    COORDINATES
-                  </Text>
-
-
-                  <Text
-                    style={styles.infoValue}
-                  >
-                    {request.latitude}
-                    {' , '}
-                    {request.longitude}
-                  </Text>
-
-                </View>
-
-              </View>
-
-            </>
-
-          )}
-
-        </View>
+        </SectionCard>
 
 
         {/* =================================================
             DESCRIPTION
-            ================================================= */}
+        ================================================= */}
 
-        {request.description && (
+        <SectionCard
+          title="Problem Description"
+          icon="chatbox-ellipses-outline"
+        >
 
-          <>
+          <Text style={styles.descriptionText}>
+            {request.description
+              ? request.description
+              : 'No additional description provided.'}
+          </Text>
 
-            <Text
-              style={styles.sectionTitle}
-            >
-              Problem Description
-            </Text>
-
-
-            <View
-              style={styles.descriptionCard}
-            >
-
-              <View
-                style={styles.descriptionIcon}
-              >
-
-                <Ionicons
-                  name="chatbubble-ellipses-outline"
-                  size={20}
-                  color={colors.accent}
-                />
-
-              </View>
-
-
-              <Text
-                style={styles.descriptionText}
-              >
-                {request.description}
-              </Text>
-
-            </View>
-
-          </>
-
-        )}
+        </SectionCard>
 
 
         {/* =================================================
-            MECHANIC
-            ================================================= */}
+            VEHICLE
+        ================================================= */}
 
-        <Text
-          style={styles.sectionTitle}
-        >
-          Mechanic
-        </Text>
-
-
-        <View
-          style={styles.mechanicCard}
+        <SectionCard
+          title="Vehicle"
+          icon="car-outline"
         >
 
-          <View
-            style={styles.mechanicIcon}
-          >
+          <InfoRow
+            icon="barcode-outline"
+            label="Vehicle ID"
+            value={request.vehicleId}
+          />
 
-            <Ionicons
-              name="person-outline"
-              size={25}
-              color={colors.accent}
-            />
-
-          </View>
+        </SectionCard>
 
 
-          <View
-            style={styles.mechanicInfo}
-          >
+        {/* =================================================
+            MECHANIC ASSIGNMENT
+        ================================================= */}
 
-            <Text
-              style={styles.mechanicTitle}
-            >
-              {request.assignedMechanicId
+        <SectionCard
+          title="Mechanic Assignment"
+          icon="person-outline"
+        >
+
+          <InfoRow
+            icon="person-circle-outline"
+            label="Mechanic Status"
+            value={
+              request.assignedMechanicId
                 ? 'Mechanic Assigned'
-                : 'Finding a mechanic'}
-            </Text>
+                : 'Searching for Mechanic'
+            }
+          />
 
+          <InfoRow
+            icon="key-outline"
+            label="Mechanic ID"
+            value={
+              request.assignedMechanicId ||
+              'Not assigned yet'
+            }
+          />
 
-            <Text
-              style={styles.mechanicSubtitle}
-            >
-              {request.assignedMechanicId
-                ? `ID: ${String(
-                    request.assignedMechanicId
-                  ).slice(0, 8)}`
-                : 'A nearby mechanic will be assigned to your request.'}
-            </Text>
-
-          </View>
-
-        </View>
+        </SectionCard>
 
 
         {/* =================================================
             STATUS TIMELINE
-            ================================================= */}
+        ================================================= */}
 
-        <Text
-          style={styles.sectionTitle}
-        >
-          Status Timeline
-        </Text>
-
-
-        <View
-          style={styles.timelineCard}
+        <SectionCard
+          title="Request Timeline"
+          icon="time-outline"
         >
 
           {history.length === 0 ? (
 
-            <View
-              style={styles.noHistory}
-            >
-
-              <Ionicons
-                name="time-outline"
-                size={22}
-                color={colors.textMuted}
-              />
-
-              <Text
-                style={styles.noHistoryText}
-              >
-                No status history available.
-              </Text>
-
-            </View>
+            <Text style={styles.emptyText}>
+              No status history available.
+            </Text>
 
           ) : (
 
-            history.map(
-              (item, index) => {
+            <View style={styles.timeline}>
 
-                const itemStatus =
-                  getStatusConfig(
-                    item.status
-                  );
+              {history.map(
+                (item, index) => {
 
-                const isLast =
-                  index ===
-                  history.length - 1;
+                  const isLast =
+                    index ===
+                    history.length - 1;
 
-                return (
-
-                  <View
-                    key={
-                      item.id ||
-                      `${item.status}-${index}`
-                    }
-                    style={styles.timelineRow}
-                  >
-
-                    {/* TIMELINE */}
-
+                  return (
                     <View
-                      style={styles.timelineLeft}
+                      key={
+                        item.id ||
+                        `${item.status}-${index}`
+                      }
+                      style={styles.timelineRow}
                     >
 
-                      <View
-                        style={[
-                          styles.timelineDot,
-                          {
-                            backgroundColor:
-                              itemStatus.color,
-                          },
-                        ]}
-                      >
-
-                        <Ionicons
-                          name={
-                            itemStatus.icon
-                          }
-                          size={12}
-                          color={colors.white}
-                        />
-
-                      </View>
-
-
-                      {!isLast && (
+                      <View style={styles.timelineLeft}>
 
                         <View
                           style={[
-                            styles.timelineLine,
-                            {
-                              backgroundColor:
-                                colors.border,
-                            },
+                            styles.timelineIcon,
+                            isLast &&
+                              styles.timelineIconActive,
                           ]}
-                        />
+                        >
 
-                      )}
+                          <Ionicons
+                            name={
+                              getStatusIcon(
+                                item.status
+                              )
+                            }
+                            size={16}
+                            color={
+                              isLast
+                                ? colors.white
+                                : colors.accent
+                            }
+                          />
 
-                    </View>
+                        </View>
 
+                        {!isLast ? (
+                          <View
+                            style={styles.timelineLine}
+                          />
+                        ) : null}
 
-                    {/* CONTENT */}
+                      </View>
 
-                    <View
-                      style={
-                        styles.timelineContent
-                      }
-                    >
-
-                      <Text
-                        style={
-                          styles.timelineStatus
-                        }
+                      <View
+                        style={styles.timelineContent}
                       >
-                        {itemStatus.label}
-                      </Text>
-
-
-                      <Text
-                        style={
-                          styles.timelineDate
-                        }
-                      >
-                        {formatDate(
-                          item.createdAt
-                        )}
-
-                        {item.createdAt
-                          ? ` • ${formatTime(
-                              item.createdAt
-                            )}`
-                          : ''}
-                      </Text>
-
-
-                      {item.notes && (
 
                         <Text
                           style={
-                            styles.timelineNotes
+                            styles.timelineStatus
                           }
                         >
-                          {item.notes}
+                          {getStatusLabel(
+                            item.status
+                          )}
                         </Text>
 
-                      )}
+                        <Text
+                          style={
+                            styles.timelineDate
+                          }
+                        >
+                          {formatDate(
+                            item.createdAt
+                          )}
+                          {' '}
+                          {formatTime(
+                            item.createdAt
+                          )}
+                        </Text>
+
+                        {item.notes ? (
+                          <Text
+                            style={
+                              styles.timelineNotes
+                            }
+                          >
+                            {item.notes}
+                          </Text>
+                        ) : null}
+
+                      </View>
 
                     </View>
+                  );
 
-                  </View>
+                }
+              )}
 
-                );
-              }
-            )
+            </View>
 
           )}
 
-        </View>
-
-
-        {/* =================================================
-            ERROR AFTER REFRESH / ACTION
-            ================================================= */}
-
-        {error && request && (
-
-          <View
-            style={styles.inlineError}
-          >
-
-            <Ionicons
-              name="alert-circle-outline"
-              size={18}
-              color={colors.danger}
-            />
-
-            <Text
-              style={styles.inlineErrorText}
-            >
-              {error}
-            </Text>
-
-          </View>
-
-        )}
+        </SectionCard>
 
 
         {/* =================================================
             CANCEL
-            ================================================= */}
+        ================================================= */}
 
-        {canCancel && (
+        {!isTerminalStatus(
+          request.status
+        ) ? (
 
           <TouchableOpacity
-            style={styles.cancelButton}
+            style={[
+              styles.cancelButton,
+              cancelling &&
+                styles.disabledButton,
+            ]}
             activeOpacity={0.85}
             disabled={cancelling}
             onPress={handleCancel}
@@ -1387,7 +1119,7 @@ export default function RequestDetailsScreen() {
 
               <ActivityIndicator
                 size="small"
-                color={colors.danger}
+                color={colors.white}
               />
 
             ) : (
@@ -1395,15 +1127,12 @@ export default function RequestDetailsScreen() {
               <Ionicons
                 name="close-circle-outline"
                 size={20}
-                color={colors.danger}
+                color={colors.white}
               />
 
             )}
 
-
-            <Text
-              style={styles.cancelText}
-            >
+            <Text style={styles.cancelButtonText}>
               {cancelling
                 ? 'Cancelling...'
                 : 'Cancel Request'}
@@ -1411,12 +1140,10 @@ export default function RequestDetailsScreen() {
 
           </TouchableOpacity>
 
-        )}
+        ) : null}
 
 
-        <View
-          style={styles.bottomSpace}
-        />
+        <View style={styles.bottomSpace} />
 
       </ScrollView>
 
@@ -1433,712 +1160,347 @@ const styles = StyleSheet.create({
 
   container: {
     flex: 1,
-    backgroundColor:
-      colors.background,
+    backgroundColor: colors.background,
   },
 
-
-  // =======================================================
-  // TOP BAR
-  // =======================================================
-
-  topBar: {
-    height: 64,
-
-    paddingHorizontal: 20,
-
+  simpleTopBar: {
+    minHeight: 64,
+    paddingHorizontal: 16,
     flexDirection: 'row',
-
     alignItems: 'center',
-
-    justifyContent:
-      'space-between',
-
-    backgroundColor:
-      colors.background,
+    justifyContent: 'space-between',
+    backgroundColor: colors.background,
   },
 
   backButton: {
     width: 42,
     height: 42,
-
-    borderRadius: 13,
-
-    backgroundColor:
-      colors.white,
-
-    borderWidth: 1,
-
-    borderColor:
-      colors.border,
-
-    justifyContent: 'center',
+    borderRadius: 21,
     alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.white,
   },
 
   topBarTitle: {
-    fontFamily: 'InterBold',
-
-    fontSize: 17,
-
-    color:
-      colors.text,
+    flex: 1,
+    marginHorizontal: 12,
+    fontFamily: 'InterSemiBold',
+    fontSize: 18,
+    color: colors.text,
+    textAlign: 'center',
   },
 
   topBarSpacer: {
     width: 42,
+    height: 42,
   },
 
+  centerContent: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 32,
+  },
 
-  // =======================================================
-  // CONTENT
-  // =======================================================
+  centerText: {
+    marginTop: 12,
+    fontFamily: 'InterRegular',
+    fontSize: 14,
+    color: colors.textMuted,
+    textAlign: 'center',
+  },
+
+  errorIcon: {
+    width: 76,
+    height: 76,
+    borderRadius: 38,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.white,
+    marginBottom: 16,
+  },
+
+  errorTitle: {
+    fontFamily: 'InterSemiBold',
+    fontSize: 20,
+    color: colors.text,
+    textAlign: 'center',
+  },
+
+  errorText: {
+    marginTop: 8,
+    fontFamily: 'InterRegular',
+    fontSize: 14,
+    lineHeight: 21,
+    color: colors.textMuted,
+    textAlign: 'center',
+  },
+
+  retryButton: {
+    marginTop: 20,
+    minHeight: 46,
+    paddingHorizontal: 20,
+    borderRadius: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.accent,
+  },
+
+  retryButtonText: {
+    marginLeft: 8,
+    fontFamily: 'InterSemiBold',
+    fontSize: 14,
+    color: colors.white,
+  },
 
   content: {
-    paddingHorizontal: 20,
-
+    paddingHorizontal: 16,
     paddingTop: 8,
-
-    paddingBottom: 100,
+    paddingBottom: 24,
   },
 
-
-  // =======================================================
-  // HERO
-  // =======================================================
-
   heroCard: {
-    backgroundColor:
-      colors.white,
-
-    borderRadius: 22,
-
-    padding: 18,
-
-    borderWidth: 1,
-
-    borderColor:
-      colors.border,
-
-    marginBottom: 24,
+    padding: 16,
+    borderRadius: 18,
+    backgroundColor: colors.white,
+    marginBottom: 14,
   },
 
   heroTop: {
     flexDirection: 'row',
-
     alignItems: 'center',
   },
 
   categoryIcon: {
-    width: 56,
-    height: 56,
-
-    borderRadius: 17,
-
-    backgroundColor:
-      colors.accentLight,
-
-    justifyContent: 'center',
+    width: 54,
+    height: 54,
+    borderRadius: 16,
     alignItems: 'center',
-
-    marginRight: 14,
+    justifyContent: 'center',
+    backgroundColor: '#F1F5F9',
   },
 
-  heroInfo: {
+  heroText: {
     flex: 1,
+    marginLeft: 12,
+    marginRight: 8,
   },
 
-  categoryTitle: {
-    fontFamily: 'InterBold',
+  categoryLabel: {
+    fontFamily: 'InterSemiBold',
+    fontSize: 16,
+    color: colors.text,
+  },
 
-    fontSize: 19,
-
-    color:
-      colors.text,
+  requestIdLabel: {
+    marginTop: 4,
+    fontFamily: 'InterRegular',
+    fontSize: 10,
+    color: colors.textMuted,
   },
 
   requestId: {
-    fontFamily: 'InterRegular',
-
-    fontSize: 12,
-
-    color:
-      colors.textMuted,
-
-    marginTop: 4,
+    marginTop: 2,
+    fontFamily: 'InterMedium',
+    fontSize: 10,
+    color: colors.textMuted,
   },
 
+  statusBadge: {
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    borderRadius: 10,
+  },
 
-  // =======================================================
-  // CURRENT STATUS
-  // =======================================================
+  statusBadgeText: {
+    fontFamily: 'InterSemiBold',
+    fontSize: 10,
+  },
 
-  currentStatus: {
+  heroDivider: {
+    height: 1,
+    backgroundColor: '#E2E8F0',
+    marginVertical: 14,
+  },
+
+  heroMeta: {
     flexDirection: 'row',
-
     alignItems: 'center',
-
-    borderRadius: 15,
-
-    padding: 13,
-
-    marginTop: 18,
   },
 
-  statusIcon: {
-    width: 38,
-    height: 38,
+  metaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginRight: 20,
+  },
 
-    borderRadius: 12,
+  metaText: {
+    marginLeft: 6,
+    fontFamily: 'InterRegular',
+    fontSize: 12,
+    color: colors.textMuted,
+  },
 
+  sectionCard: {
+    padding: 16,
+    borderRadius: 18,
+    backgroundColor: colors.white,
+    marginBottom: 14,
+  },
+
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 14,
+  },
+
+  sectionHeaderIcon: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    alignItems: 'center',
     justifyContent: 'center',
-    alignItems: 'center',
-
-    marginRight: 11,
+    backgroundColor: '#F1F5F9',
   },
-
-  statusInfo: {
-    flex: 1,
-  },
-
-  statusLabel: {
-    fontFamily: 'InterBold',
-
-    fontSize: 9,
-
-    letterSpacing: 0.7,
-
-    color:
-      colors.textMuted,
-
-    marginBottom: 3,
-  },
-
-  statusValue: {
-    fontFamily: 'InterBold',
-
-    fontSize: 14,
-  },
-
-
-  // =======================================================
-  // SECTION
-  // =======================================================
 
   sectionTitle: {
-    fontFamily: 'InterBold',
-
-    fontSize: 17,
-
-    color:
-      colors.text,
-
-    marginBottom: 12,
-
-    marginTop: 3,
-  },
-
-
-  // =======================================================
-  // INFO CARD
-  // =======================================================
-
-  infoCard: {
-    backgroundColor:
-      colors.white,
-
-    borderRadius: 18,
-
-    paddingHorizontal: 15,
-
-    borderWidth: 1,
-
-    borderColor:
-      colors.border,
-
-    marginBottom: 24,
+    marginLeft: 10,
+    fontFamily: 'InterSemiBold',
+    fontSize: 15,
+    color: colors.text,
   },
 
   infoRow: {
     flexDirection: 'row',
-
     alignItems: 'center',
-
-    paddingVertical: 15,
+    paddingVertical: 9,
   },
 
   infoIcon: {
-    width: 42,
-    height: 42,
-
-    borderRadius: 13,
-
-    backgroundColor:
-      colors.accentLight,
-
-    justifyContent: 'center',
+    width: 34,
+    height: 34,
+    borderRadius: 10,
     alignItems: 'center',
-
-    marginRight: 12,
+    justifyContent: 'center',
+    backgroundColor: '#F8FAFC',
   },
 
-  infoContent: {
+  infoTextContainer: {
     flex: 1,
+    marginLeft: 10,
   },
 
   infoLabel: {
-    fontFamily: 'InterBold',
-
-    fontSize: 9,
-
-    letterSpacing: 0.7,
-
-    color:
-      colors.textMuted,
-
-    marginBottom: 4,
+    fontFamily: 'InterRegular',
+    fontSize: 10,
+    color: colors.textMuted,
   },
 
   infoValue: {
+    marginTop: 2,
     fontFamily: 'InterMedium',
-
     fontSize: 13,
-
-    color:
-      colors.text,
-
-    lineHeight: 19,
-  },
-
-  rowDivider: {
-    height: 1,
-
-    backgroundColor:
-      colors.border,
-  },
-
-
-  // =======================================================
-  // DESCRIPTION
-  // =======================================================
-
-  descriptionCard: {
-    backgroundColor:
-      colors.white,
-
-    borderRadius: 18,
-
-    padding: 16,
-
-    borderWidth: 1,
-
-    borderColor:
-      colors.border,
-
-    flexDirection: 'row',
-
-    marginBottom: 24,
-  },
-
-  descriptionIcon: {
-    width: 40,
-    height: 40,
-
-    borderRadius: 12,
-
-    backgroundColor:
-      colors.accentLight,
-
-    justifyContent: 'center',
-    alignItems: 'center',
-
-    marginRight: 12,
+    color: colors.text,
   },
 
   descriptionText: {
-    flex: 1,
-
     fontFamily: 'InterRegular',
-
     fontSize: 13,
-
-    lineHeight: 20,
-
-    color:
-      colors.textSecondary,
+    lineHeight: 21,
+    color: colors.text,
   },
 
-
-  // =======================================================
-  // MECHANIC
-  // =======================================================
-
-  mechanicCard: {
-    backgroundColor:
-      colors.white,
-
-    borderRadius: 18,
-
-    padding: 16,
-
-    borderWidth: 1,
-
-    borderColor:
-      colors.border,
-
-    flexDirection: 'row',
-
-    alignItems: 'center',
-
-    marginBottom: 24,
-  },
-
-  mechanicIcon: {
-    width: 48,
-    height: 48,
-
-    borderRadius: 15,
-
-    backgroundColor:
-      colors.accentLight,
-
-    justifyContent: 'center',
-    alignItems: 'center',
-
-    marginRight: 13,
-  },
-
-  mechanicInfo: {
-    flex: 1,
-  },
-
-  mechanicTitle: {
-    fontFamily: 'InterBold',
-
-    fontSize: 14,
-
-    color:
-      colors.text,
-  },
-
-  mechanicSubtitle: {
+  emptyText: {
     fontFamily: 'InterRegular',
-
-    fontSize: 11,
-
-    color:
-      colors.textMuted,
-
-    marginTop: 4,
-
-    lineHeight: 17,
+    fontSize: 13,
+    lineHeight: 20,
+    color: colors.textMuted,
   },
 
-
-  // =======================================================
-  // TIMELINE
-  // =======================================================
-
-  timelineCard: {
-    backgroundColor:
-      colors.white,
-
-    borderRadius: 18,
-
-    padding: 16,
-
-    borderWidth: 1,
-
-    borderColor:
-      colors.border,
-
-    marginBottom: 20,
+  timeline: {
+    paddingTop: 2,
   },
 
   timelineRow: {
     flexDirection: 'row',
-
-    minHeight: 68,
   },
 
   timelineLeft: {
-    width: 35,
-
+    width: 32,
     alignItems: 'center',
   },
 
-  timelineDot: {
-    width: 27,
-    height: 27,
-
-    borderRadius: 10,
-
-    justifyContent: 'center',
+  timelineIcon: {
+    width: 30,
+    height: 30,
+    borderRadius: 15,
     alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F1F5F9',
+  },
+
+  timelineIconActive: {
+    backgroundColor: colors.accent,
   },
 
   timelineLine: {
-    width: 2,
-
+    width: 1,
     flex: 1,
-
-    marginVertical: 3,
+    minHeight: 34,
+    backgroundColor: '#CBD5E1',
   },
 
   timelineContent: {
     flex: 1,
-
-    paddingLeft: 8,
-
+    paddingLeft: 12,
     paddingBottom: 18,
   },
 
   timelineStatus: {
-    fontFamily: 'InterBold',
-
+    fontFamily: 'InterSemiBold',
     fontSize: 13,
-
-    color:
-      colors.text,
+    color: colors.text,
   },
 
   timelineDate: {
-    fontFamily: 'InterRegular',
-
-    fontSize: 10,
-
-    color:
-      colors.textMuted,
-
     marginTop: 3,
+    fontFamily: 'InterRegular',
+    fontSize: 10,
+    color: colors.textMuted,
   },
 
   timelineNotes: {
-    fontFamily: 'InterRegular',
-
-    fontSize: 11,
-
-    color:
-      colors.textSecondary,
-
-    lineHeight: 17,
-
     marginTop: 5,
-  },
-
-  noHistory: {
-    flexDirection: 'row',
-
-    alignItems: 'center',
-
-    paddingVertical: 12,
-  },
-
-  noHistoryText: {
     fontFamily: 'InterRegular',
-
-    fontSize: 12,
-
-    color:
-      colors.textMuted,
-
-    marginLeft: 9,
+    fontSize: 11,
+    lineHeight: 17,
+    color: colors.textMuted,
   },
-
-
-  // =======================================================
-  // CANCEL
-  // =======================================================
 
   cancelButton: {
-    height: 50,
-
-    borderRadius: 15,
-
-    borderWidth: 1,
-
-    borderColor:
-      colors.danger,
-
-    backgroundColor:
-      colors.dangerLight,
-
+    minHeight: 50,
+    borderRadius: 14,
     flexDirection: 'row',
-
     alignItems: 'center',
-
     justifyContent: 'center',
-
-    gap: 8,
-
-    marginTop: 4,
+    backgroundColor: '#DC2626',
+    marginBottom: 4,
   },
 
-  cancelText: {
-    fontFamily: 'InterBold',
-
-    fontSize: 13,
-
-    color:
-      colors.danger,
+  disabledButton: {
+    opacity: 0.65,
   },
 
-
-  // =======================================================
-  // INLINE ERROR
-  // =======================================================
-
-  inlineError: {
-    backgroundColor:
-      colors.dangerLight,
-
-    borderRadius: 13,
-
-    padding: 12,
-
-    flexDirection: 'row',
-
-    alignItems: 'center',
-
-    marginBottom: 15,
-  },
-
-  inlineErrorText: {
-    flex: 1,
-
-    fontFamily: 'InterRegular',
-
-    fontSize: 11,
-
-    color:
-      colors.danger,
-
+  cancelButtonText: {
     marginLeft: 8,
-
-    lineHeight: 17,
+    fontFamily: 'InterSemiBold',
+    fontSize: 14,
+    color: colors.white,
   },
-
-
-  // =======================================================
-  // LOADING
-  // =======================================================
-
-  loadingContainer: {
-    flex: 1,
-
-    justifyContent: 'center',
-
-    alignItems: 'center',
-
-    paddingBottom: 100,
-  },
-
-  loadingText: {
-    fontFamily: 'InterRegular',
-
-    fontSize: 13,
-
-    color:
-      colors.textMuted,
-
-    marginTop: 12,
-  },
-
-
-  // =======================================================
-  // ERROR
-  // =======================================================
-
-  errorContainer: {
-    flex: 1,
-
-    justifyContent: 'center',
-
-    alignItems: 'center',
-
-    paddingHorizontal: 25,
-
-    paddingBottom: 100,
-  },
-
-  errorIcon: {
-    width: 70,
-    height: 70,
-
-    borderRadius: 23,
-
-    backgroundColor:
-      colors.dangerLight,
-
-    justifyContent: 'center',
-    alignItems: 'center',
-
-    marginBottom: 18,
-  },
-
-  errorTitle: {
-    fontFamily: 'InterBold',
-
-    fontSize: 18,
-
-    color:
-      colors.text,
-
-    textAlign: 'center',
-  },
-
-  errorMessage: {
-    fontFamily: 'InterRegular',
-
-    fontSize: 13,
-
-    color:
-      colors.textMuted,
-
-    textAlign: 'center',
-
-    lineHeight: 20,
-
-    marginTop: 8,
-  },
-
-  retryButton: {
-    height: 46,
-
-    paddingHorizontal: 20,
-
-    borderRadius: 13,
-
-    backgroundColor:
-      colors.primary,
-
-    flexDirection: 'row',
-
-    alignItems: 'center',
-
-    justifyContent: 'center',
-
-    gap: 8,
-
-    marginTop: 20,
-  },
-
-  retryText: {
-    fontFamily: 'InterBold',
-
-    fontSize: 13,
-
-    color:
-      colors.white,
-  },
-
-
-  // =======================================================
-  // BOTTOM
-  // =======================================================
 
   bottomSpace: {
-    height: 20,
+    height: 30,
   },
 
 });
