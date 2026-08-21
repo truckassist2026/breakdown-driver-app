@@ -1,33 +1,41 @@
-
 import {
-    Text,
-    View,
+  Text,
+  View,
 } from 'react-native';
 
 import {
-    Ionicons,
+  Ionicons,
 } from '@expo/vector-icons';
 
 import colors from '../constants/colors';
 
+
 export default function RealLocationMap({
   location,
+  mechanicLocation,
+  mechanicName,
 }) {
 
   if (!location) {
     return null;
   }
 
+
   return (
     <View
       style={{
         flex: 1,
-        backgroundColor: colors.mapBackground,
+        backgroundColor:
+          colors.mapBackground,
+
         alignItems: 'center',
         justifyContent: 'center',
+
         position: 'relative',
       }}
     >
+
+      {/* DRIVER */}
 
       <View
         style={{
@@ -45,7 +53,9 @@ export default function RealLocationMap({
             width: 42,
             height: 42,
             borderRadius: 21,
-            backgroundColor: colors.accent,
+            backgroundColor:
+              colors.accent,
+
             alignItems: 'center',
             justifyContent: 'center',
           }}
@@ -61,15 +71,66 @@ export default function RealLocationMap({
 
       </View>
 
+
+      {/* MECHANIC */}
+
+      {mechanicLocation && (
+
+        <View
+          style={{
+            position: 'absolute',
+            top: '42%',
+            right: '30%',
+            width: 50,
+            height: 50,
+            borderRadius: 25,
+            backgroundColor: '#16A34A25',
+            alignItems: 'center',
+            justifyContent: 'center',
+          }}
+        >
+
+          <View
+            style={{
+              width: 38,
+              height: 38,
+              borderRadius: 19,
+              backgroundColor:
+                colors.success,
+
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+
+            <Ionicons
+              name="construct"
+              size={19}
+              color={colors.white}
+            />
+
+          </View>
+
+        </View>
+
+      )}
+
+
+      {/* CURRENT GPS */}
+
       <View
         style={{
           position: 'absolute',
           right: 14,
           bottom: 14,
-          backgroundColor: colors.white,
+          backgroundColor:
+            colors.white,
+
           borderRadius: 11,
+
           paddingHorizontal: 10,
           paddingVertical: 8,
+
           borderWidth: 1,
           borderColor: colors.border,
         }}
@@ -86,6 +147,7 @@ export default function RealLocationMap({
           CURRENT GPS
         </Text>
 
+
         <Text
           style={{
             fontFamily: 'InterSemiBold',
@@ -94,8 +156,26 @@ export default function RealLocationMap({
             marginTop: 2,
           }}
         >
-          {location.latitude.toFixed(6)}, {location.longitude.toFixed(6)}
+          {Number(location.latitude).toFixed(6)},
+          {' '}
+          {Number(location.longitude).toFixed(6)}
         </Text>
+
+
+        {mechanicLocation && (
+
+          <Text
+            style={{
+              fontFamily: 'InterRegular',
+              fontSize: 9,
+              color: colors.textSecondary,
+              marginTop: 5,
+            }}
+          >
+            🔧 {mechanicName || 'Mechanic'}
+          </Text>
+
+        )}
 
       </View>
 

@@ -1,20 +1,304 @@
-
 import {
-    ScrollView,
-    StyleSheet,
-    Text,
-    TouchableOpacity,
-    View,
+  Alert,
+  Linking,
+  ScrollView,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
 
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useEffect, useState } from 'react';
 
 import colors from '../../../constants/colors';
+import { getActiveServiceRequest } from '../../../services/requestService';
 
 export default function FoundScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
+
+  const [activeRequest, setActiveRequest] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  // =====================================================
+  // LOAD ACTIVE REQUEST
+  // =====================================================
+
+  useEffect(() => {
+    loadActiveRequest();
+  }, []);
+
+  async function loadActiveRequest() {
+    try {
+      setLoading(true);
+
+      console.log(
+        '[DRIVER FOUND] Loading active service request...'
+      );
+
+      const response =
+        await getActiveServiceRequest();
+
+      console.log(
+        '[DRIVER FOUND] Active request:',
+        JSON.stringify(response, null, 2)
+      );
+
+      setActiveRequest(response);
+
+    } catch (error) {
+
+      console.error(
+        '[DRIVER FOUND] Failed to load active request:',
+        error
+      );
+
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  // =====================================================
+  // DATA
+  // =====================================================
+
+  const mechanic =
+    activeRequest?.mechanic;
+
+  const vehicle =
+    activeRequest?.vehicle;
+
+  const category =
+    activeRequest?.category ||
+    params.type ||
+    '';
+
+  const vehicleNumber =
+    vehicle?.registrationNumber ||
+    params.vehicleNumber ||
+    'Vehicle not available';
+
+  const location =
+    activeRequest?.address ||
+    'Location not available';
+
+  const status =
+    activeRequest?.status ||
+    'ASSIGNED';
+
+  const mechanicName =
+    mechanic?.name ||
+    'Mechanic';
+
+  const mechanicRating =
+    Number(mechanic?.rating ?? 0);
+
+  const totalJobs =
+    Number(mechanic?.totalJobs ?? 0);
+
+  const experienceYears =
+    mechanic?.experienceYears;
+
+  const workshopName =
+    mechanic?.workshopName;
+
+  // =====================================================
+  // DISPLAY HELPERS
+  // =====================================================
+
+  function getServiceName(value) {
+
+    const serviceMap = {
+      BATTERY: 'Battery Assistance',
+      BREAKDOWN: 'Breakdown Assistance',
+      TYRE: 'Tyre Assistance',
+      FUEL: 'Fuel Assistance',
+    };
+
+    const normalized =
+      String(value || '')
+        .toUpperCase();
+
+    return (
+      serviceMap[normalized] ||
+      value ||
+      'Roadside Assistance'
+    );
+  }
+
+
+  function getStatusLabel(value) {
+
+    const statusMap = {
+      SEARCHING: 'SEARCHING',
+      ASSIGNED: 'ASSIGNED',
+      ACCEPTED: 'ACCEPTED',
+      EN_ROUTE: 'ON THE WAY',
+      MECHANIC_EN_ROUTE: 'ON THE WAY',
+      ARRIVED: 'ARRIVED',
+      IN_PROGRESS: 'IN PROGRESS',
+      COMPLETED: 'COMPLETED',
+      CANCELLED: 'CANCELLED',
+    };
+
+    const normalized =
+      String(value || '')
+        .toUpperCase();
+
+    return (
+      statusMap[normalized] ||
+      normalized ||
+      'ASSIGNED'
+    );
+  }
+
+
+  function getMechanicType() {
+
+    if (workshopName) {
+      return workshopName;
+    }
+
+    if (
+      experienceYears !== null &&
+      experienceYears !== undefined
+    ) {
+      return `Roadside Mechanic • ${experienceYears} yrs experience`;
+    }
+
+    return 'Roadside Mechanic';
+  }
+
+
+  function getLocationText() {
+
+    if (
+      location &&
+      location !== 'Current GPS location'
+    ) {
+      return location;
+    }
+
+    if (
+      activeRequest?.latitude &&
+      activeRequest?.longitude
+    ) {
+      return `${Number(
+        activeRequest.latitude
+      ).toFixed(5)}, ${Number(
+        activeRequest.longitude
+      ).toFixed(5)}`;
+    }
+
+    return 'Current location';
+  }
+
+
+  function getEtaText() {
+
+    // We intentionally don't show a fake ETA.
+    // Live ETA will be implemented when mechanic
+    // tracking is connected.
+
+    if (
+      mechanic?.latitude !== null &&
+      mechanic?.latitude !== undefined &&
+      mechanic?.longitude !== null &&
+      mechanic?.longitude !== undefined
+    ) {
+
+      const driverLat =
+        Number(activeRequest?.latitude);
+
+      const driverLng =
+        Number(activeRequest?.longitude);
+
+      const mechanicLat =
+        Number(mechanic.latitude);
+
+      const mechanicLng =
+        Number(mechanic.longitude);
+
+      const sameLocation =
+        Math.abs(driverLat - mechanicLat) < 0.00001 &&
+        Math.abs(driverLng - mechanicLng) < 0.00001;
+
+      if (sameLocation) {
+        return 'Nearby';
+      }
+    }
+
+    return 'Calculating';
+  }
+
+
+  // =====================================================
+  // CALL MECHANIC
+  // =====================================================
+
+  async function callMechanic() {
+
+    const phone =
+      mechanic?.phone;
+
+    if (!phone) {
+      Alert.alert(
+        'Phone number unavailable',
+        'The mechanic phone number is not available.'
+      );
+
+      return;
+    }
+
+    try {
+
+      await Linking.openURL(
+        `tel:${phone}`
+      );
+
+    } catch (error) {
+
+      console.error(
+        '[DRIVER FOUND] Unable to open phone:',
+        error
+      );
+
+      Alert.alert(
+        'Unable to call',
+        'Unable to open the phone dialer.'
+      );
+    }
+  }
+
+
+  // =====================================================
+  // TRACK MECHANIC
+  // =====================================================
+
+  function trackMechanic() {
+
+    router.push({
+      pathname: '/breakdown/active',
+
+      params: {
+        requestId:
+          activeRequest?.id || '',
+
+        type:
+          category,
+
+        vehicleNumber:
+          vehicleNumber,
+      },
+    });
+  }
+
+
+  // =====================================================
+  // UI
+  // =====================================================
 
   return (
     <View style={styles.container}>
@@ -34,9 +318,11 @@ export default function FoundScreen() {
 
         </View>
 
+
         <Text style={styles.title}>
           Mechanic found
         </Text>
+
 
         <Text style={styles.subtitle}>
           A verified mechanic is on the way to
@@ -44,15 +330,22 @@ export default function FoundScreen() {
         </Text>
 
 
+        {/* =================================================
+            ETA / STATUS
+        ================================================= */}
+
         <View style={styles.etaCard}>
 
           <View style={styles.etaIcon}>
+
             <Ionicons
               name="time-outline"
               size={24}
               color={colors.accent}
             />
+
           </View>
+
 
           <View style={styles.etaInfo}>
 
@@ -61,23 +354,31 @@ export default function FoundScreen() {
             </Text>
 
             <Text style={styles.etaValue}>
-              12 minutes
+              {getEtaText()}
             </Text>
 
           </View>
 
+
           <View style={styles.etaBadge}>
+
             <Text style={styles.etaBadgeText}>
-              ON THE WAY
+              {getStatusLabel(status)}
             </Text>
+
           </View>
 
         </View>
 
 
+        {/* =================================================
+            MECHANIC
+        ================================================= */}
+
         <Text style={styles.sectionLabel}>
           YOUR MECHANIC
         </Text>
+
 
         <View style={styles.mechanicCard}>
 
@@ -91,15 +392,20 @@ export default function FoundScreen() {
 
           </View>
 
+
           <View style={styles.mechanicInfo}>
 
             <Text style={styles.name}>
-              Kumar
+              {loading
+                ? 'Loading...'
+                : mechanicName}
             </Text>
 
+
             <Text style={styles.type}>
-              Roadside Mechanic
+              {getMechanicType()}
             </Text>
+
 
             <View style={styles.ratingRow}>
 
@@ -109,19 +415,25 @@ export default function FoundScreen() {
                 color={colors.warning}
               />
 
+
               <Text style={styles.rating}>
-                4.8
+                {mechanicRating.toFixed(1)}
               </Text>
 
+
               <Text style={styles.jobs}>
-                • 326 jobs completed
+                • {totalJobs} jobs completed
               </Text>
 
             </View>
 
           </View>
 
-          <TouchableOpacity style={styles.callButton}>
+
+          <TouchableOpacity
+            style={styles.callButton}
+            onPress={callMechanic}
+          >
 
             <Ionicons
               name="call"
@@ -134,32 +446,44 @@ export default function FoundScreen() {
         </View>
 
 
+        {/* =================================================
+            REQUEST INFORMATION
+        ================================================= */}
+
         <View style={styles.infoCard}>
 
           <InfoRow
             icon="construct-outline"
             label="SERVICE"
-            value="Battery Assistance"
+            value={getServiceName(category)}
           />
 
+
           <View style={styles.divider} />
+
 
           <InfoRow
             icon="car-outline"
             label="VEHICLE"
-            value={params.vehicleNumber || 'TN 01 AB 1234'}
+            value={vehicleNumber}
           />
 
+
           <View style={styles.divider} />
+
 
           <InfoRow
             icon="location-outline"
             label="LOCATION"
-            value="Chennai, Tamil Nadu"
+            value={getLocationText()}
           />
 
         </View>
 
+
+        {/* =================================================
+            TRUST
+        ================================================= */}
 
         <View style={styles.trustCard}>
 
@@ -169,11 +493,13 @@ export default function FoundScreen() {
             color={colors.success}
           />
 
+
           <View style={styles.trustInfo}>
 
             <Text style={styles.trustTitle}>
               Verified mechanic
             </Text>
+
 
             <Text style={styles.trustText}>
               Identity and service credentials verified.
@@ -186,20 +512,15 @@ export default function FoundScreen() {
       </ScrollView>
 
 
+      {/* ===================================================
+          BOTTOM BAR
+      =================================================== */}
+
       <View style={styles.bottomBar}>
 
         <TouchableOpacity
           style={styles.primaryButton}
-          onPress={() =>
-            router.push({
-              pathname: '/breakdown/active',
-              params: {
-                type: params.type || 'battery',
-                vehicleNumber:
-                  params.vehicleNumber || '',
-              },
-            })
-          }
+          onPress={trackMechanic}
         >
 
           <Ionicons
@@ -208,9 +529,11 @@ export default function FoundScreen() {
             color={colors.white}
           />
 
+
           <Text style={styles.primaryText}>
             TRACK MECHANIC
           </Text>
+
 
           <Ionicons
             name="arrow-forward"
@@ -226,7 +549,17 @@ export default function FoundScreen() {
   );
 }
 
-function InfoRow({ icon, label, value }) {
+
+// =========================================================
+// INFO ROW
+// =========================================================
+
+function InfoRow({
+  icon,
+  label,
+  value,
+}) {
+
   return (
     <View style={styles.infoRow}>
 
@@ -240,11 +573,13 @@ function InfoRow({ icon, label, value }) {
 
       </View>
 
+
       <View style={styles.infoText}>
 
         <Text style={styles.infoLabel}>
           {label}
         </Text>
+
 
         <Text style={styles.infoValue}>
           {value}
@@ -256,16 +591,24 @@ function InfoRow({ icon, label, value }) {
   );
 }
 
+
+// =========================================================
+// STYLES
+// =========================================================
+
 const styles = StyleSheet.create({
+
   container: {
     flex: 1,
     backgroundColor: colors.background,
   },
 
+
   content: {
     padding: 20,
     paddingBottom: 110,
   },
+
 
   successIcon: {
     width: 70,
@@ -278,6 +621,7 @@ const styles = StyleSheet.create({
     marginTop: 20,
   },
 
+
   title: {
     fontFamily: 'InterExtraBold',
     fontSize: 26,
@@ -285,6 +629,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 18,
   },
+
 
   subtitle: {
     fontFamily: 'InterRegular',
@@ -295,6 +640,7 @@ const styles = StyleSheet.create({
     marginTop: 5,
   },
 
+
   etaCard: {
     backgroundColor: colors.accentLight,
     borderRadius: 18,
@@ -303,6 +649,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
+
 
   etaIcon: {
     width: 46,
@@ -314,9 +661,11 @@ const styles = StyleSheet.create({
     marginRight: 11,
   },
 
+
   etaInfo: {
     flex: 1,
   },
+
 
   etaLabel: {
     fontFamily: 'InterBold',
@@ -325,12 +674,14 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
   },
 
+
   etaValue: {
     fontFamily: 'InterExtraBold',
     fontSize: 18,
     color: colors.text,
     marginTop: 3,
   },
+
 
   etaBadge: {
     backgroundColor: colors.successLight,
@@ -339,11 +690,13 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
 
+
   etaBadgeText: {
     fontFamily: 'InterBold',
     fontSize: 8,
     color: colors.success,
   },
+
 
   sectionLabel: {
     fontFamily: 'InterBold',
@@ -353,6 +706,7 @@ const styles = StyleSheet.create({
     marginTop: 25,
     marginBottom: 9,
   },
+
 
   mechanicCard: {
     backgroundColor: colors.white,
@@ -364,6 +718,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
 
+
   avatar: {
     width: 55,
     height: 55,
@@ -374,15 +729,18 @@ const styles = StyleSheet.create({
     marginRight: 11,
   },
 
+
   mechanicInfo: {
     flex: 1,
   },
+
 
   name: {
     fontFamily: 'InterBold',
     fontSize: 14,
     color: colors.text,
   },
+
 
   type: {
     fontFamily: 'InterRegular',
@@ -391,6 +749,7 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
 
+
   ratingRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -398,17 +757,20 @@ const styles = StyleSheet.create({
     marginTop: 5,
   },
 
+
   rating: {
     fontFamily: 'InterBold',
     fontSize: 10,
     color: colors.text,
   },
 
+
   jobs: {
     fontFamily: 'InterRegular',
     fontSize: 9,
     color: colors.textMuted,
   },
+
 
   callButton: {
     width: 43,
@@ -419,6 +781,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 
+
   infoCard: {
     backgroundColor: colors.white,
     borderRadius: 18,
@@ -428,10 +791,12 @@ const styles = StyleSheet.create({
     marginTop: 20,
   },
 
+
   infoRow: {
     flexDirection: 'row',
     alignItems: 'center',
   },
+
 
   infoIcon: {
     width: 42,
@@ -443,9 +808,11 @@ const styles = StyleSheet.create({
     marginRight: 11,
   },
 
+
   infoText: {
     flex: 1,
   },
+
 
   infoLabel: {
     fontFamily: 'InterBold',
@@ -454,6 +821,7 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
   },
 
+
   infoValue: {
     fontFamily: 'InterSemiBold',
     fontSize: 12,
@@ -461,11 +829,13 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
 
+
   divider: {
     height: 1,
     backgroundColor: colors.borderLight,
     marginVertical: 12,
   },
+
 
   trustCard: {
     marginTop: 18,
@@ -476,10 +846,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
 
+
   trustInfo: {
     flex: 1,
     marginLeft: 9,
   },
+
 
   trustTitle: {
     fontFamily: 'InterSemiBold',
@@ -487,12 +859,14 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
 
+
   trustText: {
     fontFamily: 'InterRegular',
     fontSize: 10,
     color: colors.textSecondary,
     marginTop: 2,
   },
+
 
   bottomBar: {
     position: 'absolute',
@@ -505,6 +879,7 @@ const styles = StyleSheet.create({
     padding: 20,
   },
 
+
   primaryButton: {
     height: 53,
     borderRadius: 15,
@@ -516,10 +891,12 @@ const styles = StyleSheet.create({
     gap: 9,
   },
 
+
   primaryText: {
     flex: 1,
     fontFamily: 'InterBold',
     fontSize: 12,
     color: colors.white,
   },
+
 });
