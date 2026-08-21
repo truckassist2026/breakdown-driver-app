@@ -1,243 +1,645 @@
+// src/app/(tabs)/breakdown/payment-success.js
+
+import { Ionicons } from "@expo/vector-icons";
+import { useLocalSearchParams, useRouter } from "expo-router";
+import { useEffect, useMemo, useState } from "react";
 
 import {
+  ActivityIndicator,
+  Alert,
+  ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
   View,
-} from 'react-native';
+} from "react-native";
 
-import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import colors from "../../../constants/colors";
+import spacing from "../../../constants/spacing";
 
-import colors from '../../../constants/colors';
+import { apiRequest } from "../../../services/api";
+
+// =========================================================
+// HELPERS
+// =========================================================
+
+function firstParam(value) {
+  if (Array.isArray(value)) {
+    return value[0];
+  }
+
+  return value;
+}
+
+function formatAmount(value) {
+  const number = Number(value);
+
+  if (!Number.isFinite(number)) {
+    return "0";
+  }
+
+  return number.toFixed(0);
+}
+
+function getServiceName(category) {
+  switch (String(category || "").toUpperCase()) {
+    case "BATTERY":
+      return "Battery Assistance";
+
+    case "TYRE":
+      return "Tyre Assistance";
+
+    case "FUEL":
+      return "Fuel Assistance";
+
+    case "BREAKDOWN":
+      return "Breakdown Assistance";
+
+    case "ELECTRICAL":
+      return "Electrical Assistance";
+
+    case "TOWING":
+      return "Towing Assistance";
+
+    default:
+      return "Roadside Assistance";
+  }
+}
+
+function getPaymentMethodLabel(method) {
+  const value = String(method || "")
+    .trim()
+    .toUpperCase();
+
+  if (value === "UPI") {
+    return "UPI";
+  }
+
+  if (value === "CARD") {
+    return "CARD";
+  }
+
+  if (value === "CASH") {
+    return "CASH";
+  }
+
+  return value || "PAYMENT";
+}
+
+function getTransactionId(payment, params) {
+  return (
+    payment?.transactionId ||
+    payment?.transactionID ||
+    payment?.referenceId ||
+    payment?.referenceID ||
+    payment?.id ||
+    firstParam(params.transactionId) ||
+    firstParam(params.transactionID) ||
+    "—"
+  );
+}
+
+// =========================================================
+// SCREEN
+// =========================================================
 
 export default function PaymentSuccessScreen() {
   const router = useRouter();
 
+  const params = useLocalSearchParams();
+
+  // =======================================================
+  // REQUEST ID
+  // =======================================================
+
+  const requestId = firstParam(params.requestId);
+
+  // =======================================================
+  // STATE
+  // =======================================================
+
+  const [payment, setPayment] = useState(null);
+
+  const [loading, setLoading] = useState(false);
+
+  // =======================================================
+  // LOAD PAYMENT FROM BACKEND
+  // =======================================================
+
+  useEffect(() => {
+    let mounted = true;
+
+    async function loadPayment() {
+      if (!requestId) {
+        console.log("[DRIVER PAYMENT SUCCESS] No request ID provided");
+
+        return;
+      }
+
+      try {
+        setLoading(true);
+
+        console.log("[DRIVER PAYMENT SUCCESS] Loading payment:", requestId);
+
+        const response = await apiRequest(
+          `/api/v1/payments/requests/${encodeURIComponent(String(requestId))}`,
+          {
+            method: "GET",
+          },
+        );
+
+        if (!mounted) {
+          return;
+        }
+
+        console.log(
+          "[DRIVER PAYMENT SUCCESS] Payment response:",
+          JSON.stringify(response, null, 2),
+        );
+
+        setPayment(response || null);
+      } catch (error) {
+        /*
+         * Payment was already successful before navigating
+         * to this screen, so failure to refresh the payment
+         * must not prevent the success screen from displaying.
+         *
+         * The screen can still use route parameters.
+         */
+
+        console.warn(
+          "[DRIVER PAYMENT SUCCESS] Unable to refresh payment:",
+          error,
+        );
+      } finally {
+        if (mounted) {
+          setLoading(false);
+        }
+      }
+    }
+
+    loadPayment();
+
+    return () => {
+      mounted = false;
+    };
+  }, [requestId]);
+
+  // =======================================================
+  // DISPLAY VALUES
+  // =======================================================
+
+  const amount = useMemo(() => {
+    return (
+      payment?.amount ??
+      firstParam(params.amount) ??
+      firstParam(params.amountPaid) ??
+      0
+    );
+  }, [payment?.amount, params.amount, params.amountPaid]);
+
+  const paymentMethod = getPaymentMethodLabel(
+    payment?.paymentMethod ||
+      firstParam(params.paymentMethod) ||
+      firstParam(params.paymentMode),
+  );
+
+  const transactionId = getTransactionId(payment, params);
+
+  const service =
+    payment?.serviceName ||
+    firstParam(params.serviceName) ||
+    firstParam(params.service) ||
+    getServiceName(firstParam(params.category));
+
+  // =======================================================
+  // BACK TO HOME
+  // =======================================================
+
+  const handleBackToHome = () => {
+    console.log("[DRIVER PAYMENT SUCCESS] Going to Home");
+
+    router.replace("/(tabs)/home");
+  };
+
+  // =======================================================
+  // VIEW INVOICE
+  // =======================================================
+
+  const handleViewInvoice = () => {
+    /*
+     * Invoice API/PDF generation is not currently part of
+     * the confirmed payment flow.
+     *
+     * Do not invent an endpoint here.
+     */
+
+    Alert.alert(
+      "Invoice",
+      "Your payment has been successfully recorded. Invoice viewing will be available here.",
+    );
+  };
+
+  // =======================================================
+  // UI
+  // =======================================================
+
   return (
     <View style={styles.container}>
+      <ScrollView
+        showsVerticalScrollIndicator={false}
+        contentContainerStyle={styles.content}
+      >
+        {/* =================================================
+            SUCCESS HEADER
+            ================================================= */}
 
-      <View style={styles.successOuter}>
+        <View style={styles.successArea}>
+          <View style={styles.successOuter}>
+            <View style={styles.successCircle}>
+              <Ionicons name="checkmark" size={58} color={colors.white} />
+            </View>
+          </View>
 
-        <View style={styles.successInner}>
+          <Text style={styles.title}>Payment successful</Text>
 
-          <Ionicons
-            name="checkmark"
-            size={48}
-            color={colors.white}
-          />
-
+          <Text style={styles.subtitle}>
+            Your payment has been completed successfully.
+          </Text>
         </View>
 
-      </View>
+        {/* =================================================
+            PAYMENT DETAILS
+            ================================================= */}
 
-      <Text style={styles.title}>
-        Payment successful
-      </Text>
+        <View style={styles.detailsCard}>
+          {/* AMOUNT */}
 
-      <Text style={styles.subtitle}>
-        Your payment has been completed successfully.
-      </Text>
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Amount paid</Text>
 
+            <Text style={[styles.detailValue, styles.amountValue]}>
+              ₹{formatAmount(amount)}
+            </Text>
+          </View>
 
-      <View style={styles.card}>
+          {/* PAYMENT METHOD */}
 
-        <Row
-          label="Amount paid"
-          value="₹400"
-          green
-        />
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Payment method</Text>
 
-        <Row
-          label="Payment method"
-          value="UPI"
-        />
+            <Text style={styles.detailValue}>{paymentMethod}</Text>
+          </View>
 
-        <Row
-          label="Transaction ID"
-          value="DEMO-8A42K91"
-        />
+          {/* TRANSACTION */}
 
-        <Row
-          label="Service"
-          value="Battery Assistance"
-        />
+          <View style={styles.detailRow}>
+            <Text style={styles.detailLabel}>Transaction ID</Text>
 
-      </View>
+            <Text
+              style={[styles.detailValue, styles.transactionValue]}
+              numberOfLines={1}
+              ellipsizeMode="middle"
+            >
+              {transactionId}
+            </Text>
+          </View>
 
+          {/* SERVICE */}
 
-      <TouchableOpacity style={styles.invoiceButton}>
+          <View style={[styles.detailRow, styles.lastDetailRow]}>
+            <Text style={styles.detailLabel}>Service</Text>
 
-        <Ionicons
-          name="document-text-outline"
-          size={18}
-          color={colors.accent}
-        />
+            <Text style={styles.detailValue} numberOfLines={1}>
+              {service}
+            </Text>
+          </View>
+        </View>
 
-        <Text style={styles.invoiceText}>
-          VIEW INVOICE
-        </Text>
+        {/* =================================================
+            VIEW INVOICE
+            ================================================= */}
 
-      </TouchableOpacity>
+        <TouchableOpacity
+          style={styles.invoiceButton}
+          onPress={handleViewInvoice}
+          activeOpacity={0.85}
+        >
+          <Ionicons
+            name="document-text-outline"
+            size={20}
+            color={colors.accent}
+          />
 
+          <Text style={styles.invoiceText}>VIEW INVOICE</Text>
+        </TouchableOpacity>
 
-      <TouchableOpacity
-        style={styles.ratingButton}
-        onPress={() =>
-          router.replace('/breakdown/rating')
-        }
-      >
+        {/* =================================================
+            BACK TO HOME
+            ================================================= */}
 
-        <Text style={styles.ratingButtonText}>
-          RATE YOUR EXPERIENCE
-        </Text>
+        <TouchableOpacity
+          style={styles.homeButton}
+          onPress={handleBackToHome}
+          activeOpacity={0.85}
+        >
+          <Text style={styles.homeButtonText}>BACK TO HOME</Text>
 
-        <Ionicons
-          name="arrow-forward"
-          size={18}
-          color={colors.white}
-        />
+          <Ionicons name="arrow-forward" size={20} color={colors.white} />
+        </TouchableOpacity>
 
-      </TouchableOpacity>
+        {/* =================================================
+            REFRESHING
+            ================================================= */}
 
+        {loading && (
+          <View style={styles.refreshingRow}>
+            <ActivityIndicator size="small" color={colors.accent} />
+
+            <Text style={styles.refreshingText}>Confirming payment...</Text>
+          </View>
+        )}
+      </ScrollView>
+
+      {/* =================================================
+          IMPORTANT
+          
+          NO BottomNavigation HERE.
+
+          The existing TabsLayout:
+          
+          src/app/(tabs)/_layout.js
+          
+          already provides:
+          
+          Home | Requests | Vehicle | Profile
+          
+          Therefore adding another navigation here would
+          create the duplicate bottom navigation problem.
+          ================================================= */}
     </View>
   );
 }
 
-function Row({ label, value, green }) {
-  return (
-    <View style={styles.row}>
-
-      <Text style={styles.label}>
-        {label}
-      </Text>
-
-      <Text
-        style={[
-          styles.value,
-          green && styles.green,
-        ]}
-      >
-        {value}
-      </Text>
-
-    </View>
-  );
-}
+// =========================================================
+// STYLES
+// =========================================================
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+
     backgroundColor: colors.background,
-    padding: 20,
-    justifyContent: 'center',
+  },
+
+  content: {
+    paddingHorizontal: spacing.lg || 20,
+
+    paddingTop: spacing.xl || 28,
+
+    /*
+     * Space for the existing Expo Router tab bar.
+     */
+    paddingBottom: 110,
+  },
+
+  // -----------------------------------------------------
+  // SUCCESS
+  // -----------------------------------------------------
+
+  successArea: {
+    alignItems: "center",
+
+    paddingTop: 24,
+
+    paddingBottom: 30,
   },
 
   successOuter: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    backgroundColor: colors.successLight,
-    alignItems: 'center',
-    justifyContent: 'center',
-    alignSelf: 'center',
+    width: 132,
+
+    height: 132,
+
+    borderRadius: 66,
+
+    backgroundColor: colors.successLight || "#DCFCE7",
+
+    alignItems: "center",
+
+    justifyContent: "center",
+
+    marginBottom: 26,
   },
 
-  successInner: {
-    width: 79,
-    height: 79,
-    borderRadius: 40,
-    backgroundColor: colors.success,
-    alignItems: 'center',
-    justifyContent: 'center',
+  successCircle: {
+    width: 96,
+
+    height: 96,
+
+    borderRadius: 48,
+
+    backgroundColor: colors.success || "#16A34A",
+
+    alignItems: "center",
+
+    justifyContent: "center",
   },
 
   title: {
-    fontFamily: 'InterExtraBold',
-    fontSize: 27,
-    color: colors.text,
-    textAlign: 'center',
-    marginTop: 24,
+    fontSize: 30,
+
+    fontWeight: "700",
+
+    color: colors.text || "#111827",
+
+    textAlign: "center",
+
+    marginBottom: 8,
   },
 
   subtitle: {
-    fontFamily: 'InterRegular',
-    fontSize: 12,
-    lineHeight: 18,
-    color: colors.textSecondary,
-    textAlign: 'center',
-    marginTop: 6,
-    marginBottom: 25,
+    fontSize: 14,
+
+    lineHeight: 21,
+
+    color: colors.textMuted || "#64748B",
+
+    textAlign: "center",
+
+    maxWidth: 320,
   },
 
-  card: {
+  // -----------------------------------------------------
+  // DETAILS
+  // -----------------------------------------------------
+
+  detailsCard: {
     backgroundColor: colors.white,
-    borderRadius: 20,
-    padding: 17,
+
+    borderRadius: 18,
+
     borderWidth: 1,
+
     borderColor: colors.borderLight,
+
+    paddingHorizontal: 18,
+
+    paddingVertical: 8,
+
+    marginBottom: 18,
+
+    shadowColor: "#000",
+
+    shadowOpacity: 0.04,
+
+    shadowRadius: 12,
+
+    shadowOffset: {
+      width: 0,
+
+      height: 4,
+    },
+
+    elevation: 2,
   },
 
-  row: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 15,
+  detailRow: {
+    minHeight: 58,
+
+    flexDirection: "row",
+
+    alignItems: "center",
+
+    justifyContent: "space-between",
+
+    borderBottomWidth: 1,
+
+    borderBottomColor: colors.borderLight,
   },
 
-  label: {
-    fontFamily: 'InterRegular',
-    fontSize: 11,
-    color: colors.textSecondary,
+  lastDetailRow: {
+    borderBottomWidth: 0,
   },
 
-  value: {
-    fontFamily: 'InterSemiBold',
-    fontSize: 11,
+  detailLabel: {
+    flex: 1,
+
+    fontSize: 13,
+
+    color: colors.textMuted,
+
+    paddingRight: 12,
+  },
+
+  detailValue: {
+    flex: 1,
+
+    textAlign: "right",
+
+    fontSize: 13,
+
+    fontWeight: "600",
+
     color: colors.text,
-    maxWidth: 180,
-    textAlign: 'right',
   },
 
-  green: {
-    fontFamily: 'InterExtraBold',
-    fontSize: 17,
-    color: colors.success,
+  amountValue: {
+    color: colors.success || "#16A34A",
+
+    fontSize: 15,
   },
+
+  transactionValue: {
+    fontSize: 12,
+  },
+
+  // -----------------------------------------------------
+  // INVOICE
+  // -----------------------------------------------------
 
   invoiceButton: {
-    height: 50,
-    borderRadius: 15,
-    backgroundColor: colors.white,
+    minHeight: 58,
+
+    borderRadius: 16,
+
     borderWidth: 1,
-    borderColor: colors.border,
-    marginTop: 15,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-    gap: 8,
+
+    borderColor: colors.borderLight,
+
+    backgroundColor: colors.white,
+
+    flexDirection: "row",
+
+    alignItems: "center",
+
+    justifyContent: "center",
+
+    gap: 10,
+
+    marginBottom: 14,
   },
 
   invoiceText: {
-    fontFamily: 'InterBold',
-    fontSize: 11,
+    fontSize: 13,
+
+    fontWeight: "700",
+
     color: colors.accent,
+
+    letterSpacing: 0.2,
   },
 
-  ratingButton: {
-    height: 54,
-    borderRadius: 15,
+  // -----------------------------------------------------
+  // HOME
+  // -----------------------------------------------------
+
+  homeButton: {
+    minHeight: 60,
+
+    borderRadius: 16,
+
     backgroundColor: colors.accent,
-    marginTop: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    flexDirection: 'row',
-    gap: 9,
+
+    flexDirection: "row",
+
+    alignItems: "center",
+
+    justifyContent: "center",
+
+    gap: 12,
+
+    paddingHorizontal: 20,
   },
 
-  ratingButtonText: {
-    fontFamily: 'InterBold',
-    fontSize: 11,
+  homeButtonText: {
     color: colors.white,
+
+    fontSize: 13,
+
+    fontWeight: "700",
+
+    letterSpacing: 0.2,
+  },
+
+  // -----------------------------------------------------
+  // LOADING
+  // -----------------------------------------------------
+
+  refreshingRow: {
+    flexDirection: "row",
+
+    alignItems: "center",
+
+    justifyContent: "center",
+
+    gap: 8,
+
+    paddingTop: 18,
+  },
+
+  refreshingText: {
+    fontSize: 12,
+
+    color: colors.textMuted,
   },
 });

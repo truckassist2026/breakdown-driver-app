@@ -1,7 +1,8 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import {
   ActivityIndicator,
+  Alert,
   ScrollView,
   StyleSheet,
   Text,
@@ -10,24 +11,132 @@ import {
 } from 'react-native';
 
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 
 import colors from '../../../constants/colors';
+import { apiRequest } from '../../../services/api';
 
 export default function PaymentScreen() {
   const router = useRouter();
+  const params = useLocalSearchParams();
+
+  const requestId = Array.isArray(params.requestId)
+    ? params.requestId[0]
+    : params.requestId;
 
   const [method, setMethod] = useState('UPI');
   const [processing, setProcessing] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [request, setRequest] = useState(null);
+  const [payment, setPayment] = useState(null);
+  const [error, setError] = useState('');
 
-  const pay = () => {
-    setProcessing(true);
+  const loadPayment = async (showLoader = false) => {
+    if (!requestId) {
+      setError('Request ID is missing.');
+      setLoading(false);
+      return;
+    }
 
-    setTimeout(() => {
-      setProcessing(false);
-      router.replace('/breakdown/payment-success');
-    }, 1500);
+    try {
+      if (showLoader) setLoading(true);
+      setError('');
+
+      const [requestResponse, paymentResponse] = await Promise.all([
+        apiRequest(`/api/v1/requests/${encodeURIComponent(String(requestId))}`, { method: 'GET' }),
+        apiRequest(`/api/v1/payments/requests/${encodeURIComponent(String(requestId))}`, { method: 'GET' }),
+      ]);
+
+      console.log('[DRIVER PAYMENT] Request:', requestResponse);
+      console.log('[DRIVER PAYMENT] Payment:', paymentResponse);
+
+      setRequest(requestResponse);
+      setPayment(paymentResponse);
+    } catch (err) {
+      console.error('[DRIVER PAYMENT] Load failed:', err);
+      setError(err?.data?.message || err?.message || 'Unable to load payment details.');
+    } finally {
+      setLoading(false);
+    }
   };
+
+  useEffect(() => {
+    let mounted = true;
+    const load = async () => {
+      if (mounted) await loadPayment(true);
+    };
+    load();
+    return () => { mounted = false; };
+  }, [requestId]);
+
+  const pay = async () => {
+    if (!requestId || processing || !payment) return;
+
+    try {
+      setProcessing(true);
+
+      const response = await apiRequest(
+        `/api/v1/payments/requests/${encodeURIComponent(String(requestId))}/pay`,
+        {
+          method: 'POST',
+          body: { paymentMethod: method },
+        }
+      );
+
+      console.log('[DRIVER PAYMENT] Payment response:', response);
+
+      router.replace({
+        pathname: '/breakdown/payment-success',
+        params: {
+          requestId: String(requestId),
+          amount: String(response?.amount ?? payment?.amount ?? ''),
+          paymentMethod: String(response?.paymentMethod ?? method),
+          transactionId: String(response?.id ?? ''),
+        },
+      });
+    } catch (err) {
+      console.error('[DRIVER PAYMENT] Payment failed:', err);
+      Alert.alert(
+        'Payment Failed',
+        err?.data?.message || err?.message || 'Unable to complete payment.'
+      );
+    } finally {
+      setProcessing(false);
+    }
+  };
+
+  const amount = Number(payment?.amount ?? 0);
+  const serviceName =
+    request?.category === 'BATTERY' ? 'Battery Assistance' :
+    request?.category === 'TYRE' ? 'Tyre Assistance' :
+    request?.category === 'FUEL' ? 'Fuel Assistance' :
+    request?.category === 'BREAKDOWN' ? 'Breakdown Assistance' :
+    request?.category || 'Roadside Assistance';
+  const vehicle = request?.vehicle;
+  const vehicleText = [vehicle?.manufacturer, vehicle?.model, vehicle?.registrationNumber]
+    .filter(Boolean).join(' • ');
+
+  if (loading) {
+    return (
+      <View style={[styles.container, { alignItems: 'center', justifyContent: 'center' }]}>
+        <ActivityIndicator size="large" color={colors.accent} />
+        <Text style={{ marginTop: 12, color: colors.textMuted, fontFamily: 'InterMedium', fontSize: 11 }}>Loading payment...</Text>
+      </View>
+    );
+  }
+
+  if (error || !payment) {
+    return (
+      <View style={[styles.container, { alignItems: 'center', justifyContent: 'center', padding: 24 }]}>
+        <Ionicons name="alert-circle-outline" size={40} color={colors.accent} />
+        <Text style={{ marginTop: 12, fontFamily: 'InterBold', fontSize: 16, color: colors.text }}>Unable to load payment</Text>
+        <Text style={{ marginTop: 7, fontFamily: 'InterRegular', fontSize: 11, color: colors.textMuted, textAlign: 'center' }}>{error || 'Payment details are unavailable.'}</Text>
+        <TouchableOpacity style={{ marginTop: 20, backgroundColor: colors.accent, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 13 }} onPress={() => loadPayment(true)}>
+          <Text style={{ fontFamily: 'InterBold', fontSize: 10, color: colors.white }}>RETRY</Text>
+        </TouchableOpacity>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -51,7 +160,7 @@ export default function PaymentScreen() {
           </Text>
 
           <Text style={styles.subtitle}>
-            Complete your payment
+            {serviceName}{vehicle?.registrationNumber ? ` • ${vehicle.registrationNumber}` : ''}
           </Text>
         </View>
 
@@ -70,7 +179,7 @@ export default function PaymentScreen() {
           </Text>
 
           <Text style={styles.amount}>
-            ₹400
+            ₹{amount.toFixed(0)}
           </Text>
 
           <View style={styles.amountStatus}>
@@ -123,12 +232,12 @@ export default function PaymentScreen() {
 
           <Row
             label="Service charge"
-            value="₹300"
+            value={`₹${amount.toFixed(0)}`}
           />
 
           <Row
             label="Travel charge"
-            value="₹100"
+            value="₹0"
           />
 
           <View style={styles.divider} />
@@ -140,7 +249,7 @@ export default function PaymentScreen() {
             </Text>
 
             <Text style={styles.total}>
-              ₹400
+              {`₹${amount.toFixed(0)}`}
             </Text>
 
           </View>
@@ -173,7 +282,7 @@ export default function PaymentScreen() {
             processing && styles.disabled,
           ]}
           onPress={pay}
-          disabled={processing}
+          disabled={processing || String(payment?.status || '').toUpperCase() !== 'PENDING'}
         >
 
           {processing ? (
@@ -196,7 +305,7 @@ export default function PaymentScreen() {
               />
 
               <Text style={styles.payText}>
-                PAY ₹400
+                PAY {`₹${amount.toFixed(0)}`}
               </Text>
 
               <Ionicons
