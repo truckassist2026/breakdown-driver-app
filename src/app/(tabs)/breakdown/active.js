@@ -1,6 +1,10 @@
-import { useEffect, useRef, useState } from 'react';
+import {
+  useEffect,
+  useState,
+} from 'react';
 
 import {
+  ActivityIndicator,
   Alert,
   Linking,
   ScrollView,
@@ -10,22 +14,161 @@ import {
   View,
 } from 'react-native';
 
-import { Ionicons } from '@expo/vector-icons';
+import {
+  Ionicons,
+} from '@expo/vector-icons';
+
 import {
   useLocalSearchParams,
   useRouter,
 } from 'expo-router';
 
 import colors from '../../../constants/colors';
-import {
-  getActiveServiceRequest,
-} from '../../../services/requestService';
-
-import RealLocationMap from '../../../components/RealLocationMap';
+import spacing from '../../../constants/spacing';
 
 
 // =========================================================
-// ACTIVE / TRACK MECHANIC SCREEN
+// HELPERS
+// =========================================================
+
+function getInitials(name) {
+
+  if (!name) {
+    return 'DR';
+  }
+
+  return String(name)
+    .trim()
+    .split(/\s+/)
+    .slice(0, 2)
+    .map(
+      (part) =>
+        part.charAt(0).toUpperCase()
+    )
+    .join('');
+}
+
+
+function getServiceName(category) {
+
+  const map = {
+    BATTERY: 'Battery Assistance',
+    TYRE: 'Tyre Issue',
+    FUEL: 'Fuel Assistance',
+    BREAKDOWN: 'Breakdown Assistance',
+    TOWING: 'Towing Assistance',
+  };
+
+  return (
+    map[
+      String(category || '')
+        .toUpperCase()
+    ] ||
+    category ||
+    'Service Request'
+  );
+}
+
+
+function formatVehicle(vehicle) {
+
+  if (!vehicle) {
+    return 'Vehicle details unavailable';
+  }
+
+  const manufacturer =
+    vehicle.manufacturer || '';
+
+  const model =
+    vehicle.model || '';
+
+  const registration =
+    vehicle.registrationNumber || '';
+
+  const vehicleName =
+    [
+      manufacturer,
+      model,
+    ]
+      .filter(Boolean)
+      .join(' ');
+
+  if (
+    vehicleName &&
+    registration
+  ) {
+    return `${vehicleName} • ${registration}`;
+  }
+
+  return (
+    vehicleName ||
+    registration ||
+    'Vehicle details unavailable'
+  );
+}
+
+
+function formatDistance(distanceKm) {
+
+  if (
+    distanceKm === null ||
+    distanceKm === undefined ||
+    Number.isNaN(
+      Number(distanceKm)
+    )
+  ) {
+    return 'Distance unavailable';
+  }
+
+  const distance =
+    Number(distanceKm);
+
+  return `${distance.toFixed(1)} km away`;
+}
+
+
+function calculateEta(distanceKm) {
+
+  if (
+    distanceKm === null ||
+    distanceKm === undefined
+  ) {
+    return null;
+  }
+
+  const distance =
+    Number(distanceKm);
+
+  if (
+    Number.isNaN(distance)
+  ) {
+    return null;
+  }
+
+  const minutes =
+    Math.max(
+      2,
+      Math.round(
+        distance * 4
+      )
+    );
+
+  return minutes;
+}
+
+
+function normalizeStatus(status) {
+
+  return String(
+    status || ''
+  )
+    .trim()
+    .toUpperCase();
+}
+
+
+// =========================================================
+// ACTIVE SCREEN
 // =========================================================
 
 export default function ActiveScreen() {
@@ -33,16 +176,26 @@ export default function ActiveScreen() {
   const router =
     useRouter();
 
+
   const params =
     useLocalSearchParams();
 
-  const mapRef =
-    useRef(null);
 
+  const requestId =
+    Array.isArray(
+      params.requestId
+    )
+      ? params.requestId[0]
+      : params.requestId;
+
+
+  // =======================================================
+  // STATE
+  // =======================================================
 
   const [
-    activeRequest,
-    setActiveRequest,
+    request,
+    setRequest,
   ] = useState(null);
 
 
@@ -53,52 +206,72 @@ export default function ActiveScreen() {
 
 
   const [
-    refreshing,
-    setRefreshing,
+    error,
+    setError,
+  ] = useState('');
+
+
+  const [
+    updatingStatus,
+    setUpdatingStatus,
   ] = useState(false);
 
 
   // =======================================================
-  // LOAD ACTIVE REQUEST
+  // LOAD REQUEST
   // =======================================================
 
-  useEffect(() => {
-
-    loadActiveRequest();
-
-  }, []);
-
-
-  async function loadActiveRequest(
-    showRefreshing = false
+  async function loadRequest(
+    showLoader = true
   ) {
+
+    console.log(
+      '===================================='
+    );
+
+    console.log(
+      '[MECHANIC ACTIVE] Loading request'
+    );
+
+    console.log(
+      '[MECHANIC ACTIVE] Request ID:',
+      requestId
+    );
+
+
+    if (!requestId) {
+
+      console.error(
+        '[MECHANIC ACTIVE] Missing requestId'
+      );
+
+      setError(
+        'Request ID is missing.'
+      );
+
+      setLoading(false);
+
+      return;
+    }
+
 
     try {
 
-      if (showRefreshing) {
-        setRefreshing(true);
-      } else {
+      if (showLoader) {
         setLoading(true);
       }
 
-
-      console.log(
-        '[DRIVER ACTIVE] Loading active request...'
-      );
-
-
-      console.log(
-        '[DRIVER ACTIVE] Request ID:',
-        params?.requestId
-      );
+      setError('');
 
 
       const response =
-        await getActiveServiceRequest();
+        await getMechanicRequestById(
+          requestId
+        );
 
 
       console.log(
-        '[DRIVER ACTIVE] Active request:',
+        '[MECHANIC ACTIVE] API response:',
         JSON.stringify(
           response,
           null,
@@ -107,34 +280,428 @@ export default function ActiveScreen() {
       );
 
 
-      setActiveRequest(
+      console.log(
+        '[MECHANIC ACTIVE] Backend status:',
+        response?.status
+      );
+
+
+      setRequest(
         response
       );
 
-
-    } catch (error) {
+    } catch (err) {
 
       console.error(
-        '[DRIVER ACTIVE] Failed to load active request:',
-        error
+        '[MECHANIC ACTIVE] Request error:',
+        err
       );
 
 
-      if (!showRefreshing) {
-
-        Alert.alert(
-          'Unable to load request',
-          'We could not load your active service request.'
-        );
-
-      }
+      setError(
+        err?.message ||
+        'Unable to load request.'
+      );
 
     } finally {
 
       setLoading(false);
-      setRefreshing(false);
 
     }
+  }
+
+
+  // =======================================================
+  // INITIAL LOAD
+  // =======================================================
+
+  useEffect(
+    () => {
+
+      loadRequest();
+
+    },
+    [
+      requestId,
+    ]
+  );
+
+
+  // =======================================================
+  // UPDATE STATUS
+  // =======================================================
+
+  const handleStatusUpdate =
+    async (
+      nextStatus
+    ) => {
+
+      if (
+        !requestId ||
+        updatingStatus
+      ) {
+        return;
+      }
+
+
+      const currentStatus =
+        normalizeStatus(
+          request?.status
+        );
+
+
+      const targetStatus =
+        normalizeStatus(
+          nextStatus
+        );
+
+
+      console.log(
+        '===================================='
+      );
+
+      console.log(
+        '[MECHANIC ACTIVE] Status update'
+      );
+
+      console.log(
+        '[MECHANIC ACTIVE] Request ID:',
+        requestId
+      );
+
+      console.log(
+        '[MECHANIC ACTIVE] Current:',
+        currentStatus
+      );
+
+      console.log(
+        '[MECHANIC ACTIVE] Target:',
+        targetStatus
+      );
+
+
+      try {
+
+        setUpdatingStatus(true);
+
+
+        const response =
+          await updateMechanicRequestStatus(
+            requestId,
+            targetStatus
+          );
+
+
+        console.log(
+          '[MECHANIC ACTIVE] Status response:',
+          JSON.stringify(
+            response,
+            null,
+            2
+          )
+        );
+
+
+        // -------------------------------------------------
+        // ALWAYS RELOAD FROM BACKEND
+        // -------------------------------------------------
+
+        await loadRequest(
+          false
+        );
+
+
+      } catch (err) {
+
+        console.error(
+          '[MECHANIC ACTIVE] Status update error:',
+          err
+        );
+
+
+        Alert.alert(
+          'Unable to Update',
+          err?.data?.message ||
+          err?.message ||
+          `Unable to update status to ${targetStatus}.`
+        );
+
+      } finally {
+
+        setUpdatingStatus(false);
+
+      }
+    };
+
+
+  // =======================================================
+  // CALL DRIVER
+  // =======================================================
+
+  const handleCallDriver =
+    async () => {
+
+      const phone =
+        request?.driver?.phone;
+
+
+      if (!phone) {
+
+        console.log(
+          '[MECHANIC ACTIVE] Driver phone unavailable'
+        );
+
+        return;
+      }
+
+
+      try {
+
+        await Linking.openURL(
+          `tel:${phone}`
+        );
+
+      } catch (err) {
+
+        console.error(
+          '[MECHANIC ACTIVE] Unable to call:',
+          err
+        );
+
+      }
+    };
+
+
+  // =======================================================
+  // NAVIGATE
+  // =======================================================
+
+  const handleNavigate =
+    async () => {
+
+      const latitude =
+        request?.latitude;
+
+      const longitude =
+        request?.longitude;
+
+
+      if (
+        latitude === null ||
+        latitude === undefined ||
+        longitude === null ||
+        longitude === undefined
+      ) {
+
+        Alert.alert(
+          'Location unavailable',
+          'Driver location is not available.'
+        );
+
+        return;
+      }
+
+
+      const url =
+        `https://www.google.com/maps/dir/?api=1&destination=${latitude},${longitude}`;
+
+
+      try {
+
+        await Linking.openURL(
+          url
+        );
+
+      } catch (err) {
+
+        console.error(
+          '[MECHANIC ACTIVE] Navigation error:',
+          err
+        );
+
+      }
+    };
+
+
+  // =======================================================
+  // NEXT ACTION
+  // =======================================================
+
+  const handleNext =
+    async () => {
+
+      const status =
+        normalizeStatus(
+          request?.status
+        );
+
+
+      // ---------------------------------------------------
+      // ASSIGNED → MECHANIC_EN_ROUTE
+      // ---------------------------------------------------
+
+      if (
+        status === 'ASSIGNED'
+      ) {
+
+        await handleStatusUpdate(
+          'MECHANIC_EN_ROUTE'
+        );
+
+        return;
+      }
+
+
+      // ---------------------------------------------------
+      // MECHANIC_EN_ROUTE → ARRIVED
+      // ---------------------------------------------------
+
+      if (
+        status ===
+        'MECHANIC_EN_ROUTE'
+      ) {
+
+        await handleStatusUpdate(
+          'ARRIVED'
+        );
+
+        return;
+      }
+
+
+      // ---------------------------------------------------
+      // ARRIVED → IN_PROGRESS
+      // ---------------------------------------------------
+
+      if (
+        status === 'ARRIVED'
+      ) {
+
+        console.log(
+          '[MECHANIC ACTIVE] Starting service:',
+          requestId
+        );
+
+        await handleStatusUpdate(
+          'IN_PROGRESS'
+        );
+
+        return;
+      }
+
+
+      // ---------------------------------------------------
+      // ALREADY IN PROGRESS
+      // ---------------------------------------------------
+
+      if (
+        status === 'IN_PROGRESS'
+      ) {
+
+        router.push({
+          pathname:
+            '/service',
+
+          params: {
+            requestId:
+              requestId || '',
+          },
+        });
+
+        return;
+      }
+
+    };
+
+
+  // =======================================================
+  // LOADING
+  // =======================================================
+
+  if (loading) {
+
+    return (
+      <View
+        style={styles.centerContainer}
+      >
+
+        <ActivityIndicator
+          size="large"
+          color={colors.accent}
+        />
+
+        <Text
+          style={styles.loadingText}
+        >
+          Loading active request...
+        </Text>
+
+      </View>
+    );
+
+  }
+
+
+  // =======================================================
+  // ERROR
+  // =======================================================
+
+  if (
+    error ||
+    !request
+  ) {
+
+    return (
+      <View
+        style={styles.centerContainer}
+      >
+
+        <View
+          style={styles.errorIcon}
+        >
+
+          <Ionicons
+            name="alert-circle-outline"
+            size={34}
+            color={colors.accent}
+          />
+
+        </View>
+
+
+        <Text
+          style={styles.errorTitle}
+        >
+          Request not found
+        </Text>
+
+
+        <Text
+          style={styles.errorMessage}
+        >
+          {error ||
+            'Unable to load this service request.'}
+        </Text>
+
+
+        <TouchableOpacity
+          style={styles.goBackButton}
+          onPress={() =>
+            router.back()
+          }
+        >
+
+          <Text
+            style={styles.goBackText}
+          >
+            GO BACK
+          </Text>
+
+        </TouchableOpacity>
+
+      </View>
+    );
+
   }
 
 
@@ -142,674 +709,205 @@ export default function ActiveScreen() {
   // DATA
   // =======================================================
 
-  const mechanic =
-    activeRequest?.mechanic ||
+  const driver =
+    request.driver ||
     null;
 
 
   const vehicle =
-    activeRequest?.vehicle ||
+    request.vehicle ||
     null;
 
 
-  const driverLatitude =
-    Number(
-      activeRequest?.latitude
-    );
+  const driverName =
+    driver?.name ||
+    'Driver';
 
 
-  const driverLongitude =
-    Number(
-      activeRequest?.longitude
-    );
-
-
-  const mechanicLatitude =
-    Number(
-      mechanic?.latitude
-    );
-
-
-  const mechanicLongitude =
-    Number(
-      mechanic?.longitude
-    );
-
-
-  const hasDriverLocation =
-    Number.isFinite(
-      driverLatitude
-    ) &&
-    Number.isFinite(
-      driverLongitude
-    );
-
-
-  const hasMechanicLocation =
-    Number.isFinite(
-      mechanicLatitude
-    ) &&
-    Number.isFinite(
-      mechanicLongitude
-    );
-
-
-  // =======================================================
-  // REQUEST INFORMATION
-  // =======================================================
-
-  const requestStatus =
-    String(
-      activeRequest?.status ||
-      'ASSIGNED'
-    ).toUpperCase();
-
-
-  const category =
-    activeRequest?.category ||
+  const driverPhone =
+    driver?.phone ||
     '';
 
 
-  const mechanicName =
-    mechanic?.name ||
-    'Mechanic';
-
-
-  const mechanicPhone =
-    mechanic?.phone ||
-    '';
-
-
-  const mechanicRating =
-    Number(
-      mechanic?.rating ?? 0
+  const vehicleText =
+    formatVehicle(
+      vehicle
     );
 
 
-  const mechanicJobs =
-    Number(
-      mechanic?.totalJobs ?? 0
-    );
-
-
-  const workshopName =
-    mechanic?.workshopName ||
-    'Roadside Mechanic';
-
-
-  const vehicleNumber =
-    vehicle?.registrationNumber ||
-    activeRequest?.vehicleId ||
-    'Vehicle';
-
-
-  const locationAddress =
-    activeRequest?.address ||
-    'Current GPS location';
-
-
-  // =======================================================
-  // SERVICE NAME
-  // =======================================================
-
-  function getServiceName(
-    value
-  ) {
-
-    const serviceMap = {
-
-      BATTERY:
-        'Battery Assistance',
-
-      BREAKDOWN:
-        'Breakdown Assistance',
-
-      TYRE:
-        'Tyre Assistance',
-
-      FUEL:
-        'Fuel Assistance',
-
-    };
-
-
-    const normalized =
-      String(
-        value || ''
-      ).toUpperCase();
-
-
-    return (
-      serviceMap[normalized] ||
-      value ||
-      'Roadside Assistance'
-    );
-  }
-
-
-  // =======================================================
-  // STATUS LABEL
-  // =======================================================
-
-  function getStatusLabel(
-    status
-  ) {
-
-    const statusMap = {
-
-      SEARCHING:
-        'SEARCHING',
-
-      ASSIGNED:
-        'ASSIGNED',
-
-      ACCEPTED:
-        'ACCEPTED',
-
-      EN_ROUTE:
-        'ON THE WAY',
-
-      MECHANIC_EN_ROUTE:
-        'ON THE WAY',
-
-      ARRIVED:
-        'ARRIVED',
-
-      IN_PROGRESS:
-        'IN PROGRESS',
-
-      COMPLETED:
-        'COMPLETED',
-
-      CANCELLED:
-        'CANCELLED',
-
-    };
-
-
-    return (
-      statusMap[status] ||
-      status ||
-      'ASSIGNED'
-    );
-  }
-
-
-  // =======================================================
-  // HEADER TITLE
-  // =======================================================
-
-  function getHeaderTitle() {
-
-    if (
-      requestStatus ===
-      'ARRIVED'
-    ) {
-      return 'Mechanic arrived';
-    }
-
-
-    if (
-      requestStatus ===
-      'IN_PROGRESS'
-    ) {
-      return 'Service in progress';
-    }
-
-
-    if (
-      requestStatus ===
-      'COMPLETED'
-    ) {
-      return 'Service completed';
-    }
-
-
-    if (
-      requestStatus ===
-      'CANCELLED'
-    ) {
-      return 'Request cancelled';
-    }
-
-
-    return 'Mechanic on the way';
-  }
-
-
-  // =======================================================
-  // DISTANCE CALCULATION
-  // =======================================================
-
-  function calculateDistanceKm(
-    lat1,
-    lon1,
-    lat2,
-    lon2
-  ) {
-
-    if (
-      !Number.isFinite(lat1) ||
-      !Number.isFinite(lon1) ||
-      !Number.isFinite(lat2) ||
-      !Number.isFinite(lon2)
-    ) {
-
-      return null;
-    }
-
-
-    const earthRadiusKm =
-      6371;
-
-
-    const dLat =
-      (
-        lat2 - lat1
-      ) *
-      Math.PI /
-      180;
-
-
-    const dLon =
-      (
-        lon2 - lon1
-      ) *
-      Math.PI /
-      180;
-
-
-    const a =
-      Math.sin(
-        dLat / 2
-      ) *
-      Math.sin(
-        dLat / 2
-      ) +
-
-      Math.cos(
-        lat1 *
-        Math.PI /
-        180
-      ) *
-
-      Math.cos(
-        lat2 *
-        Math.PI /
-        180
-      ) *
-
-      Math.sin(
-        dLon / 2
-      ) *
-      Math.sin(
-        dLon / 2
-      );
-
-
-    const c =
-      2 *
-      Math.atan2(
-        Math.sqrt(a),
-        Math.sqrt(
-          1 - a
-        )
-      );
-
-
-    return (
-      earthRadiusKm *
-      c
-    );
-  }
-
-
-  const distanceKm =
-    calculateDistanceKm(
-      driverLatitude,
-      driverLongitude,
-      mechanicLatitude,
-      mechanicLongitude
+  const serviceName =
+    getServiceName(
+      request.category
     );
 
 
   const distanceText =
-    distanceKm === null
+    formatDistance(
+      request.distanceKm
+    );
 
-      ? 'Calculating'
 
-      : distanceKm < 1
+  const eta =
+    calculateEta(
+      request.distanceKm
+    );
 
-        ? `${Math.round(
-            distanceKm * 1000
-          )} m`
 
-        : `${distanceKm.toFixed(
-            1
-          )} km`;
+  const location =
+    request.address ||
+    'Driver location';
+
+
+  const status =
+    normalizeStatus(
+      request.status
+    );
 
 
   // =======================================================
-  // ETA
-  // =======================================================
-  //
-  // We do NOT display a fake ETA.
-  //
-  // Real road ETA will be implemented after the
-  // mechanic live-location and routing flow is connected.
+  // STATUS UI
   // =======================================================
 
-  function getEtaText() {
-
-    if (
-      requestStatus ===
-      'ARRIVED'
-    ) {
-      return 'Arrived';
-    }
+  const isArrived =
+    status === 'ARRIVED';
 
 
-    if (
-      distanceKm === null
-    ) {
-      return 'Calculating';
-    }
+  const isEnRoute =
+    status ===
+    'MECHANIC_EN_ROUTE';
 
 
-    if (
-      distanceKm < 0.05
-    ) {
-      return 'Nearby';
-    }
+  const isAssigned =
+    status ===
+    'ASSIGNED';
 
 
-    return 'On the way';
+  const isInProgress =
+    status ===
+    'IN_PROGRESS';
+
+
+  let statusTitle =
+    'Active Request';
+
+
+  let statusSubtitle =
+    'Service request is active.';
+
+
+  let statusIcon =
+    'ellipse-outline';
+
+
+  if (isAssigned) {
+
+    statusTitle =
+      'Request accepted';
+
+    statusSubtitle =
+      'Start travelling to the driver location.';
+
+    statusIcon =
+      'checkmark-circle-outline';
+
+  }
+
+
+  if (isEnRoute) {
+
+    statusTitle =
+      'On the way';
+
+    statusSubtitle =
+      'Navigate to the driver location.';
+
+    statusIcon =
+      'navigate-outline';
+
+  }
+
+
+  if (isArrived) {
+
+    statusTitle =
+      'You have arrived';
+
+    statusSubtitle =
+      'You can now start the service.';
+
+    statusIcon =
+      'checkmark-circle-outline';
+
+  }
+
+
+  if (isInProgress) {
+
+    statusTitle =
+      'Service in progress';
+
+    statusSubtitle =
+      'Service is currently in progress.';
+
+    statusIcon =
+      'construct-outline';
+
   }
 
 
   // =======================================================
-  // CALL MECHANIC
+  // BUTTON TEXT
   // =======================================================
 
-  async function callMechanic() {
-
-    if (!mechanicPhone) {
-
-      Alert.alert(
-        'Phone unavailable',
-        'The mechanic phone number is not available.'
-      );
-
-      return;
-    }
+  let buttonText =
+    'START TRAVEL';
 
 
-    try {
-
-      await Linking.openURL(
-        `tel:${mechanicPhone}`
-      );
-
-    } catch (error) {
-
-      console.error(
-        '[DRIVER ACTIVE] Call failed:',
-        error
-      );
+  let buttonIcon =
+    'navigate-outline';
 
 
-      Alert.alert(
-        'Unable to call',
-        'Unable to open the phone dialer.'
-      );
-    }
+  if (isEnRoute) {
+
+    buttonText =
+      "I'VE ARRIVED";
+
+    buttonIcon =
+      'checkmark';
+
+  }
+
+
+  if (isArrived) {
+
+    buttonText =
+      'START SERVICE';
+
+    buttonIcon =
+      'arrow-forward';
+
+  }
+
+
+  if (isInProgress) {
+
+    buttonText =
+      'CONTINUE SERVICE';
+
+    buttonIcon =
+      'arrow-forward';
+
   }
 
 
   // =======================================================
-  // STATUS PROGRESS
-  // =======================================================
-
-  const requestAccepted =
-    [
-      'ASSIGNED',
-      'ACCEPTED',
-      'EN_ROUTE',
-      'MECHANIC_EN_ROUTE',
-      'ARRIVED',
-      'IN_PROGRESS',
-      'COMPLETED',
-    ].includes(
-      requestStatus
-    );
-
-
-  const mechanicEnRoute =
-    [
-      'EN_ROUTE',
-      'MECHANIC_EN_ROUTE',
-      'ARRIVED',
-      'IN_PROGRESS',
-      'COMPLETED',
-    ].includes(
-      requestStatus
-    );
-
-
-  const mechanicArrived =
-    [
-      'ARRIVED',
-      'IN_PROGRESS',
-      'COMPLETED',
-    ].includes(
-      requestStatus
-    );
-
-
-  // =======================================================
-  // LOADING
-  // =======================================================
-
-  if (
-    loading &&
-    !activeRequest
-  ) {
-
-    return (
-      <View
-        style={
-          styles.loadingContainer
-        }
-      >
-
-        <Ionicons
-          name="navigate-outline"
-          size={36}
-          color={colors.accent}
-        />
-
-
-        <Text
-          style={
-            styles.loadingTitle
-          }
-        >
-          Loading mechanic location...
-        </Text>
-
-
-        <Text
-          style={
-            styles.loadingText
-          }
-        >
-          Please wait while we load your active request.
-        </Text>
-
-      </View>
-    );
-  }
-
-
-  // =======================================================
-  // NO ACTIVE REQUEST
-  // =======================================================
-
-  if (
-    !loading &&
-    !activeRequest
-  ) {
-
-    return (
-      <View
-        style={
-          styles.loadingContainer
-        }
-      >
-
-        <Ionicons
-          name="alert-circle-outline"
-          size={42}
-          color={colors.warning}
-        />
-
-
-        <Text
-          style={
-            styles.loadingTitle
-          }
-        >
-          No active request
-        </Text>
-
-
-        <Text
-          style={
-            styles.loadingText
-          }
-        >
-          Your active service request could not be found.
-        </Text>
-
-
-        <TouchableOpacity
-          style={
-            styles.retryButton
-          }
-          onPress={() =>
-            loadActiveRequest()
-          }
-        >
-
-          <Text
-            style={
-              styles.retryText
-            }
-          >
-            TRY AGAIN
-          </Text>
-
-        </TouchableOpacity>
-
-      </View>
-    );
-  }
-
-
-  // =======================================================
-  // MAIN UI
+  // UI
   // =======================================================
 
   return (
     <View
-      style={
-        styles.container
-      }
+      style={styles.container}
     >
-
-      {/* =================================================
-          HEADER
-      ================================================= */}
-
-      <View
-        style={
-          styles.header
-        }
-      >
-
-        <TouchableOpacity
-          style={
-            styles.backButton
-          }
-          onPress={() =>
-            router.back()
-          }
-        >
-
-          <Ionicons
-            name="arrow-back"
-            size={21}
-            color={colors.text}
-          />
-
-        </TouchableOpacity>
-
-
-        <View
-          style={
-            styles.headerInfo
-          }
-        >
-
-          <Text
-            style={
-              styles.title
-            }
-          >
-            {getHeaderTitle()}
-          </Text>
-
-
-          <Text
-            style={
-              styles.subtitle
-            }
-          >
-            Track your mechanic
-          </Text>
-
-        </View>
-
-
-        <View
-          style={
-            styles.liveBadge
-          }
-        >
-
-          <View
-            style={
-              styles.liveDot
-            }
-          />
-
-
-          <Text
-            style={
-              styles.liveText
-            }
-          >
-            LIVE
-          </Text>
-
-        </View>
-
-      </View>
-
-
-      {/* =================================================
-          CONTENT
-      ================================================= */}
 
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -819,217 +917,61 @@ export default function ActiveScreen() {
       >
 
         {/* =================================================
-            REAL MAP
+            HEADER
         ================================================= */}
 
         <View
-          style={
-            styles.mapCard
-          }
+          style={styles.header}
         >
 
-          {hasDriverLocation ? (
-
-            <RealLocationMap
-
-              location={{
-                latitude:
-                  driverLatitude,
-
-                longitude:
-                  driverLongitude,
-              }}
-
-
-              locationAddress={
-                locationAddress
-              }
-
-
-              mechanicLocation={
-                hasMechanicLocation
-                  ? {
-                      latitude:
-                        mechanicLatitude,
-
-                      longitude:
-                        mechanicLongitude,
-                    }
-                  : null
-              }
-
-
-              mechanicName={
-                mechanicName
-              }
-
-
-              mapRef={
-                mapRef
-              }
-
-            />
-
-          ) : (
-
-            <View
-              style={
-                styles.mapUnavailable
-              }
-            >
-
-              <Ionicons
-                name="location-outline"
-                size={34}
-                color={colors.textMuted}
-              />
-
-
-              <Text
-                style={
-                  styles.mapUnavailableTitle
-                }
-              >
-                Location unavailable
-              </Text>
-
-
-              <Text
-                style={
-                  styles.mapUnavailableText
-                }
-              >
-                Waiting for your location.
-              </Text>
-
-            </View>
-
-          )}
-
-
-          {/* MAP LEGEND */}
-
-          <View
-            style={
-              styles.mapBottom
-            }
-          >
-
-            <View
-              style={
-                styles.mapLegend
-              }
-            >
-
-              <View
-                style={
-                  styles.legendDotDriver
-                }
-              />
-
-
-              <Text
-                style={
-                  styles.legendText
-                }
-              >
-                You
-              </Text>
-
-
-              <View
-                style={
-                  styles.legendDotMechanic
-                }
-              />
-
-
-              <Text
-                style={
-                  styles.legendText
-                }
-              >
-                Mechanic
-              </Text>
-
-            </View>
-
-          </View>
-
-        </View>
-
-
-        {/* =================================================
-            DISTANCE / STATUS
-        ================================================= */}
-
-        <View
-          style={
-            styles.etaCard
-          }
-        >
-
-          <View
-            style={
-              styles.etaMain
-            }
-          >
-
-            <Text
-              style={
-                styles.etaLabel
-              }
-            >
-              MECHANIC STATUS
-            </Text>
-
-
-            <Text
-              style={
-                styles.eta
-              }
-            >
-              {getEtaText()}
-            </Text>
-
-          </View>
-
-
-          <View
-            style={
-              styles.dividerVertical
-            }
-          />
-
-
-          <View
-            style={
-              styles.etaSide
+          <TouchableOpacity
+            style={styles.backButton}
+            onPress={() =>
+              router.back()
             }
           >
 
             <Ionicons
-              name="navigate-outline"
+              name="arrow-back"
               size={20}
-              color={colors.accent}
+              color={colors.text}
             />
 
+          </TouchableOpacity>
+
+
+          <View
+            style={styles.headerText}
+          >
 
             <Text
-              style={
-                styles.distance
-              }
+              style={styles.headerTitle}
             >
-              {distanceText}
+              Active Request
             </Text>
 
 
             <Text
-              style={
-                styles.distanceLabel
-              }
+              style={styles.headerSubtitle}
             >
-              away
+              Request #{request.id}
+            </Text>
+
+          </View>
+
+
+          <View
+            style={styles.activeBadge}
+          >
+
+            <View
+              style={styles.activeDot}
+            />
+
+            <Text
+              style={styles.activeBadgeText}
+            >
+              {status || 'ACTIVE'}
             </Text>
 
           </View>
@@ -1038,120 +980,210 @@ export default function ActiveScreen() {
 
 
         {/* =================================================
-            YOUR MECHANIC
+            MAP
+        ================================================= */}
+
+        <View
+          style={styles.mapCard}
+        >
+
+          <View
+            style={styles.mapArea}
+          >
+
+            <View
+              style={styles.mapRoad1}
+            />
+
+            <View
+              style={styles.mapRoad2}
+            />
+
+
+            <View
+              style={styles.locationPin}
+            >
+
+              <Ionicons
+                name="location"
+                size={26}
+                color={colors.accent}
+              />
+
+            </View>
+
+
+            <View
+              style={styles.locationLabel}
+            >
+
+              <Text
+                style={
+                  styles.locationLabelText
+                }
+              >
+                Driver location
+              </Text>
+
+            </View>
+
+          </View>
+
+
+          <View
+            style={styles.locationBottom}
+          >
+
+            <View
+              style={styles.locationInfo}
+            >
+
+              <View
+                style={styles.locationIcon}
+              >
+
+                <Ionicons
+                  name="navigate-outline"
+                  size={18}
+                  color={colors.accent}
+                />
+
+              </View>
+
+
+              <View>
+
+                <Text
+                  style={styles.locationTitle}
+                >
+                  {location}
+                </Text>
+
+
+                <Text
+                  style={
+                    styles.locationSubtitle
+                  }
+                >
+
+                  {distanceText}
+
+                  {eta
+                    ? ` • Approx. ${eta} min`
+                    : ''}
+
+                </Text>
+
+              </View>
+
+            </View>
+
+
+            <TouchableOpacity
+              style={
+                styles.navigateButton
+              }
+              onPress={
+                handleNavigate
+              }
+            >
+
+              <Ionicons
+                name="navigate"
+                size={16}
+                color={colors.white}
+              />
+
+
+              <Text
+                style={
+                  styles.navigateText
+                }
+              >
+                Navigate
+              </Text>
+
+            </TouchableOpacity>
+
+          </View>
+
+        </View>
+
+
+        {/* =================================================
+            DRIVER
         ================================================= */}
 
         <Text
-          style={
-            styles.sectionLabel
-          }
+          style={styles.sectionTitle}
         >
-          YOUR MECHANIC
+          Driver details
         </Text>
 
 
         <View
-          style={
-            styles.mechanicCard
-          }
+          style={styles.card}
         >
 
           <View
-            style={
-              styles.avatar
-            }
+            style={styles.avatar}
           >
 
-            <Ionicons
-              name="person"
-              size={29}
-              color={colors.accent}
-            />
+            <Text
+              style={styles.avatarText}
+            >
+              {getInitials(
+                driverName
+              )}
+            </Text>
 
           </View>
 
 
           <View
-            style={
-              styles.mechanicInfo
-            }
+            style={styles.driverInfo}
           >
 
             <Text
-              style={
-                styles.mechanicName
-              }
+              style={styles.driverName}
             >
-              {mechanicName}
+              {driverName}
             </Text>
 
 
             <Text
-              style={
-                styles.mechanicType
-              }
-              numberOfLines={1}
+              style={styles.driverVehicle}
             >
-
-              {workshopName}
-
-              {vehicleNumber
-                ? ` • ${vehicleNumber}`
-                : ''}
-
+              {vehicleText}
             </Text>
 
 
-            <View
-              style={
-                styles.ratingRow
-              }
-            >
-
-              <Ionicons
-                name="star"
-                size={13}
-                color={colors.warning}
-              />
-
+            {driverPhone ? (
 
               <Text
                 style={
-                  styles.rating
+                  styles.driverPhone
                 }
               >
-                {mechanicRating.toFixed(
-                  1
-                )}
+                {driverPhone}
               </Text>
 
-
-              <Text
-                style={
-                  styles.jobs
-                }
-              >
-                • {mechanicJobs} jobs
-              </Text>
-
-            </View>
+            ) : null}
 
           </View>
 
 
           <TouchableOpacity
-            style={
-              styles.callButton
-            }
+            style={styles.callButton}
             onPress={
-              callMechanic
+              handleCallDriver
             }
           >
 
             <Ionicons
-              name="call"
-              size={18}
-              color={colors.white}
+              name="call-outline"
+              size={19}
+              color={colors.success}
             />
 
           </TouchableOpacity>
@@ -1160,89 +1192,53 @@ export default function ActiveScreen() {
 
 
         {/* =================================================
-            SERVICE STATUS
+            REQUEST DETAILS
         ================================================= */}
 
         <Text
-          style={
-            styles.sectionLabel
-          }
+          style={styles.sectionTitle}
         >
-          SERVICE STATUS
+          Request details
         </Text>
 
 
         <View
-          style={
-            styles.statusCard
-          }
+          style={styles.card}
         >
 
-          <Status
-            icon="checkmark"
-            title="Request accepted"
-            subtitle={
-              requestAccepted
-                ? 'Mechanic has accepted your request'
-                : 'Waiting for mechanic to accept'
-            }
-            completed={
-              requestAccepted
-            }
-            active={
-              false
-            }
+          <DetailRow
+            icon="construct-outline"
+            iconColor={colors.accent}
+            title="Service"
+            value={serviceName}
           />
 
 
           <View
-            style={
-              styles.statusLine
-            }
+            style={styles.divider}
           />
 
 
-          <Status
-            icon="navigate"
-            title="Mechanic on the way"
-            subtitle={
-              mechanicEnRoute
-                ? 'Mechanic is heading towards your location'
-                : 'Waiting for mechanic to start travelling'
-            }
-            completed={
-              mechanicEnRoute
-            }
-            active={
-              requestStatus ===
-              'EN_ROUTE' ||
-              requestStatus ===
-              'MECHANIC_EN_ROUTE'
-            }
+          <DetailRow
+            icon="location-outline"
+            iconColor={colors.accent}
+            title="Location"
+            value={location}
           />
 
 
           <View
-            style={
-              styles.statusLine
-            }
+            style={styles.divider}
           />
 
 
-          <Status
-            icon="location"
-            title="Mechanic arrived"
-            subtitle={
-              mechanicArrived
-                ? 'Mechanic has arrived at your location'
-                : 'Waiting for mechanic to arrive'
-            }
-            completed={
-              mechanicArrived
-            }
-            active={
-              requestStatus ===
-              'ARRIVED'
+          <DetailRow
+            icon="document-text-outline"
+            iconColor={colors.accent}
+            title="Description"
+            value={
+              request.description ||
+              'No additional description'
             }
           />
 
@@ -1250,68 +1246,138 @@ export default function ActiveScreen() {
 
 
         {/* =================================================
-            SAFETY
+            STATUS
         ================================================= */}
 
         <View
-          style={
-            styles.safetyCard
-          }
+          style={styles.statusCard}
         >
 
-          <Ionicons
-            name="shield-checkmark-outline"
-            size={21}
-            color={colors.success}
-          />
-
-
-          <Text
-            style={
-              styles.safetyText
-            }
+          <View
+            style={[
+              styles.statusIcon,
+              isArrived &&
+                styles.statusIconSuccess,
+            ]}
           >
-            Stay in a safe location while you wait.
-            Keep your hazard lights on if necessary.
-          </Text>
+
+            <Ionicons
+              name={statusIcon}
+              size={21}
+              color={
+                isArrived
+                  ? colors.success
+                  : colors.accent
+              }
+            />
+
+          </View>
+
+
+          <View
+            style={styles.statusContent}
+          >
+
+            <Text
+              style={styles.statusTitle}
+            >
+              {statusTitle}
+            </Text>
+
+
+            <Text
+              style={
+                styles.statusSubtitle
+              }
+            >
+              {statusSubtitle}
+            </Text>
+
+          </View>
 
         </View>
 
+      </ScrollView>
 
-        {/* =================================================
-            REFRESH
-        ================================================= */}
+
+      {/* ===================================================
+          BOTTOM ACTION
+      =================================================== */}
+
+      <View
+        style={styles.bottomBar}
+      >
 
         <TouchableOpacity
-          style={
-            styles.refreshButton
+          style={[
+            styles.primaryButton,
+            updatingStatus &&
+              styles.primaryButtonDisabled,
+          ]}
+          onPress={
+            handleNext
           }
-          onPress={() =>
-            loadActiveRequest(true)
+          disabled={
+            updatingStatus
           }
-          disabled={refreshing}
+          activeOpacity={0.85}
         >
 
-          <Ionicons
-            name="refresh-outline"
-            size={17}
-            color={colors.accent}
-          />
+          {updatingStatus ? (
+
+            <View
+              style={
+                styles.loadingButtonContent
+              }
+            >
+
+              <ActivityIndicator
+                size="small"
+                color={colors.white}
+              />
+
+              <Text
+                style={
+                  styles.primaryButtonText
+                }
+              >
+                UPDATING...
+              </Text>
+
+            </View>
+
+          ) : (
+
+            <>
+
+              <Text
+                style={
+                  styles.primaryButtonText
+                }
+              >
+                {buttonText}
+              </Text>
 
 
-          <Text
-            style={
-              styles.refreshText
-            }
-          >
-            {refreshing
-              ? 'REFRESHING...'
-              : 'REFRESH LOCATION'}
-          </Text>
+              <View
+                style={styles.buttonIcon}
+              >
+
+                <Ionicons
+                  name={buttonIcon}
+                  size={19}
+                  color={colors.white}
+                />
+
+              </View>
+
+            </>
+
+          )}
 
         </TouchableOpacity>
 
-      </ScrollView>
+      </View>
 
     </View>
   );
@@ -1319,77 +1385,49 @@ export default function ActiveScreen() {
 
 
 // =========================================================
-// STATUS COMPONENT
+// DETAIL ROW
 // =========================================================
 
-function Status({
+function DetailRow({
   icon,
+  iconColor,
   title,
-  subtitle,
-  completed,
-  active,
+  value,
 }) {
 
   return (
     <View
-      style={
-        styles.statusRow
-      }
+      style={styles.detailRow}
     >
 
       <View
-        style={[
-          styles.statusIcon,
-
-          completed &&
-            styles.completedIcon,
-
-          active &&
-            styles.activeIcon,
-        ]}
+        style={styles.detailIcon}
       >
 
         <Ionicons
           name={icon}
-          size={15}
-          color={
-            completed ||
-            active
-              ? colors.white
-              : colors.textLight
-          }
+          size={18}
+          color={iconColor}
         />
 
       </View>
 
 
       <View
-        style={
-          styles.statusInfo
-        }
+        style={styles.detailText}
       >
 
         <Text
-          style={[
-            styles.statusTitle,
-
-            active &&
-              styles.activeStatusTitle,
-
-            completed &&
-              styles.completedStatusTitle,
-          ]}
+          style={styles.detailTitle}
         >
           {title}
         </Text>
 
 
         <Text
-          style={
-            styles.statusSubtitle
-          }
+          style={styles.detailValue}
         >
-          {subtitle}
+          {value}
         </Text>
 
       </View>
@@ -1403,754 +1441,536 @@ function Status({
 // STYLES
 // =========================================================
 
-const styles = StyleSheet.create({
-
-  container: {
-    flex: 1,
-    backgroundColor:
-      colors.background,
-  },
-
-
-  loadingContainer: {
-    flex: 1,
-    backgroundColor:
-      colors.background,
-
-    alignItems: 'center',
-    justifyContent: 'center',
-
-    padding: 30,
-  },
-
-
-  loadingTitle: {
-    fontFamily:
-      'InterBold',
-
-    fontSize: 16,
-
-    color:
-      colors.text,
-
-    marginTop: 14,
-
-    textAlign: 'center',
-  },
-
-
-  loadingText: {
-    fontFamily:
-      'InterRegular',
-
-    fontSize: 11,
-
-    lineHeight: 17,
-
-    color:
-      colors.textMuted,
-
-    marginTop: 6,
-
-    textAlign: 'center',
-  },
-
-
-  retryButton: {
-    marginTop: 20,
-
-    height: 46,
-
-    paddingHorizontal: 25,
-
-    borderRadius: 13,
-
-    backgroundColor:
-      colors.accent,
-
-    alignItems: 'center',
-
-    justifyContent: 'center',
-  },
-
-
-  retryText: {
-    fontFamily:
-      'InterBold',
-
-    fontSize: 10,
-
-    color:
-      colors.white,
-  },
-
-
-  header: {
-    minHeight: 76,
-
-    paddingHorizontal: 20,
-
-    paddingTop: 16,
-
-    paddingBottom: 12,
-
-    backgroundColor:
-      colors.white,
-
-    borderBottomWidth: 1,
-
-    borderBottomColor:
-      colors.borderLight,
-
-    flexDirection: 'row',
-
-    alignItems: 'center',
-  },
-
-
-  backButton: {
-    width: 43,
-    height: 43,
-
-    borderRadius: 14,
-
-    backgroundColor:
-      colors.background,
-
-    borderWidth: 1,
-
-    borderColor:
-      colors.border,
-
-    alignItems: 'center',
-
-    justifyContent: 'center',
-
-    marginRight: 11,
-  },
-
-
-  headerInfo: {
-    flex: 1,
-  },
-
-
-  title: {
-    fontFamily:
-      'InterBold',
-
-    fontSize: 17,
-
-    color:
-      colors.text,
-  },
-
-
-  subtitle: {
-    fontFamily:
-      'InterRegular',
-
-    fontSize: 10,
-
-    color:
-      colors.textMuted,
-
-    marginTop: 3,
-  },
-
-
-  liveBadge: {
-    flexDirection: 'row',
-
-    alignItems: 'center',
-
-    backgroundColor:
-      colors.successLight,
-
-    borderRadius: 9,
-
-    paddingHorizontal: 8,
-
-    paddingVertical: 6,
-
-    gap: 5,
-  },
-
-
-  liveDot: {
-    width: 6,
-    height: 6,
-
-    borderRadius: 3,
-
-    backgroundColor:
-      colors.success,
-  },
-
-
-  liveText: {
-    fontFamily:
-      'InterBold',
-
-    fontSize: 8,
-
-    color:
-      colors.success,
-  },
-
-
-  content: {
-    padding: 20,
-
-    paddingBottom: 40,
-  },
-
-
-  // =======================================================
-  // MAP
-  // =======================================================
-
-  mapCard: {
-    height: 280,
-
-    borderRadius: 22,
-
-    overflow: 'hidden',
-
-    borderWidth: 1,
-
-    borderColor:
-      colors.border,
-
-    position: 'relative',
-  },
-
-
-  mapBottom: {
-    position: 'absolute',
-
-    bottom: 12,
-
-    left: 12,
-  },
-
-
-  mapLegend: {
-    backgroundColor:
-      colors.white,
-
-    borderRadius: 11,
-
-    paddingHorizontal: 10,
-
-    paddingVertical: 7,
-
-    flexDirection: 'row',
-
-    alignItems: 'center',
-
-    gap: 5,
-  },
-
-
-  legendDotDriver: {
-    width: 8,
-    height: 8,
-
-    borderRadius: 4,
-
-    backgroundColor:
-      colors.accent,
-  },
-
-
-  legendDotMechanic: {
-    width: 8,
-    height: 8,
-
-    borderRadius: 4,
-
-    backgroundColor:
-      colors.success,
-
-    marginLeft: 6,
-  },
-
-
-  legendText: {
-    fontFamily:
-      'InterMedium',
-
-    fontSize: 9,
-
-    color:
-      colors.textSecondary,
-  },
-
-
-  mapUnavailable: {
-    flex: 1,
-
-    backgroundColor:
-      colors.mapBackground,
-
-    alignItems: 'center',
-
-    justifyContent: 'center',
-
-    padding: 20,
-  },
-
-
-  mapUnavailableTitle: {
-    fontFamily:
-      'InterBold',
-
-    fontSize: 13,
-
-    color:
-      colors.text,
-
-    marginTop: 8,
-  },
-
-
-  mapUnavailableText: {
-    fontFamily:
-      'InterRegular',
-
-    fontSize: 10,
-
-    color:
-      colors.textMuted,
-
-    marginTop: 4,
-
-    textAlign: 'center',
-  },
-
-
-  // =======================================================
-  // ETA / DISTANCE
-  // =======================================================
-
-  etaCard: {
-    backgroundColor:
-      colors.white,
-
-    borderRadius: 18,
-
-    padding: 16,
-
-    marginTop: 14,
-
-    borderWidth: 1,
-
-    borderColor:
-      colors.borderLight,
-
-    flexDirection: 'row',
-
-    alignItems: 'center',
-  },
-
-
-  etaMain: {
-    flex: 1,
-  },
-
-
-  etaLabel: {
-    fontFamily:
-      'InterBold',
-
-    fontSize: 9,
-
-    letterSpacing: 0.7,
-
-    color:
-      colors.textMuted,
-  },
-
-
-  eta: {
-    fontFamily:
-      'InterExtraBold',
-
-    fontSize: 24,
-
-    color:
-      colors.text,
-
-    marginTop: 2,
-  },
-
-
-  dividerVertical: {
-    width: 1,
-
-    height: 43,
-
-    backgroundColor:
-      colors.border,
-
-    marginHorizontal: 18,
-  },
-
-
-  etaSide: {
-    width: 75,
-
-    alignItems: 'center',
-  },
-
-
-  distance: {
-    fontFamily:
-      'InterBold',
-
-    fontSize: 13,
-
-    color:
-      colors.text,
-
-    marginTop: 2,
-  },
-
-
-  distanceLabel: {
-    fontFamily:
-      'InterRegular',
-
-    fontSize: 9,
-
-    color:
-      colors.textMuted,
-  },
-
-
-  // =======================================================
-  // SECTION
-  // =======================================================
-
-  sectionLabel: {
-    fontFamily:
-      'InterBold',
-
-    fontSize: 10,
-
-    letterSpacing: 0.8,
-
-    color:
-      colors.textMuted,
-
-    marginTop: 22,
-
-    marginBottom: 9,
-  },
-
-
-  // =======================================================
-  // MECHANIC
-  // =======================================================
-
-  mechanicCard: {
-    backgroundColor:
-      colors.white,
-
-    borderRadius: 18,
-
-    borderWidth: 1,
-
-    borderColor:
-      colors.borderLight,
-
-    padding: 14,
-
-    flexDirection: 'row',
-
-    alignItems: 'center',
-  },
-
-
-  avatar: {
-    width: 53,
-    height: 53,
-
-    borderRadius: 17,
-
-    backgroundColor:
-      colors.accentLight,
-
-    alignItems: 'center',
-
-    justifyContent: 'center',
-
-    marginRight: 11,
-  },
-
-
-  mechanicInfo: {
-    flex: 1,
-  },
-
-
-  mechanicName: {
-    fontFamily:
-      'InterBold',
-
-    fontSize: 14,
-
-    color:
-      colors.text,
-  },
-
-
-  mechanicType: {
-    fontFamily:
-      'InterRegular',
-
-    fontSize: 9,
-
-    color:
-      colors.textMuted,
-
-    marginTop: 3,
-  },
-
-
-  ratingRow: {
-    flexDirection: 'row',
-
-    alignItems: 'center',
-
-    gap: 4,
-
-    marginTop: 5,
-  },
-
-
-  rating: {
-    fontFamily:
-      'InterBold',
-
-    fontSize: 10,
-
-    color:
-      colors.text,
-  },
-
-
-  jobs: {
-    fontFamily:
-      'InterRegular',
-
-    fontSize: 9,
-
-    color:
-      colors.textMuted,
-  },
-
-
-  callButton: {
-    width: 42,
-    height: 42,
-
-    borderRadius: 14,
-
-    backgroundColor:
-      colors.accent,
-
-    alignItems: 'center',
-
-    justifyContent: 'center',
-  },
-
-
-  // =======================================================
-  // STATUS
-  // =======================================================
-
-  statusCard: {
-    backgroundColor:
-      colors.white,
-
-    borderRadius: 18,
-
-    padding: 16,
-
-    borderWidth: 1,
-
-    borderColor:
-      colors.borderLight,
-  },
-
-
-  statusRow: {
-    flexDirection: 'row',
-
-    alignItems: 'center',
-
-    minHeight: 50,
-  },
-
-
-  statusIcon: {
-    width: 35,
-    height: 35,
-
-    borderRadius: 12,
-
-    backgroundColor:
-      colors.background,
-
-    alignItems: 'center',
-
-    justifyContent: 'center',
-
-    marginRight: 11,
-  },
-
-
-  completedIcon: {
-    backgroundColor:
-      colors.success,
-  },
-
-
-  activeIcon: {
-    backgroundColor:
-      colors.accent,
-  },
-
-
-  statusInfo: {
-    flex: 1,
-  },
-
-
-  statusTitle: {
-    fontFamily:
-      'InterSemiBold',
-
-    fontSize: 12,
-
-    color:
-      colors.textLight,
-  },
-
-
-  activeStatusTitle: {
-    color:
-      colors.accent,
-  },
-
-
-  completedStatusTitle: {
-    color:
-      colors.text,
-  },
-
-
-  statusSubtitle: {
-    fontFamily:
-      'InterRegular',
-
-    fontSize: 9,
-
-    color:
-      colors.textMuted,
-
-    marginTop: 2,
-  },
-
-
-  statusLine: {
-    width: 1,
-
-    height: 11,
-
-    backgroundColor:
-      colors.border,
-
-    marginLeft: 17,
-  },
-
-
-  // =======================================================
-  // SAFETY
-  // =======================================================
-
-  safetyCard: {
-    marginTop: 18,
-
-    backgroundColor:
-      colors.successLight,
-
-    borderRadius: 15,
-
-    padding: 13,
-
-    flexDirection: 'row',
-
-    alignItems: 'center',
-
-    gap: 9,
-  },
-
-
-  safetyText: {
-    flex: 1,
-
-    fontFamily:
-      'InterRegular',
-
-    fontSize: 10,
-
-    lineHeight: 15,
-
-    color:
-      colors.textSecondary,
-  },
-
-
-  // =======================================================
-  // REFRESH
-  // =======================================================
-
-  refreshButton: {
-    marginTop: 15,
-
-    height: 44,
-
-    borderRadius: 13,
-
-    borderWidth: 1,
-
-    borderColor:
-      colors.accent,
-
-    backgroundColor:
-      colors.white,
-
-    flexDirection: 'row',
-
-    alignItems: 'center',
-
-    justifyContent: 'center',
-
-    gap: 7,
-  },
-
-
-  refreshText: {
-    fontFamily:
-      'InterBold',
-
-    fontSize: 10,
-
-    color:
-      colors.accent,
-  },
-
-});
+const styles =
+  StyleSheet.create({
+
+    container: {
+      flex: 1,
+      backgroundColor:
+        colors.background,
+    },
+
+
+    centerContainer: {
+      flex: 1,
+      backgroundColor:
+        colors.background,
+      alignItems: 'center',
+      justifyContent: 'center',
+      padding: 30,
+    },
+
+
+    loadingText: {
+      marginTop: 12,
+      fontFamily: 'InterMedium',
+      fontSize: 12,
+      color: colors.textMuted,
+    },
+
+
+    errorIcon: {
+      width: 65,
+      height: 65,
+      borderRadius: 20,
+      backgroundColor:
+        colors.accentLight,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: 15,
+    },
+
+
+    errorTitle: {
+      fontFamily: 'InterBold',
+      fontSize: 17,
+      color: colors.text,
+    },
+
+
+    errorMessage: {
+      fontFamily: 'InterRegular',
+      fontSize: 11,
+      color: colors.textMuted,
+      textAlign: 'center',
+      marginTop: 8,
+      maxWidth: 320,
+    },
+
+
+    goBackButton: {
+      marginTop: 22,
+      backgroundColor:
+        colors.accent,
+      paddingHorizontal: 28,
+      paddingVertical: 15,
+      borderRadius: 14,
+    },
+
+
+    goBackText: {
+      fontFamily: 'InterBold',
+      fontSize: 10,
+      color: colors.white,
+    },
+
+
+    content: {
+      paddingHorizontal:
+        spacing.screenHorizontal,
+      paddingTop: 18,
+      paddingBottom: 110,
+    },
+
+
+    header: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginBottom: 18,
+    },
+
+
+    backButton: {
+      width: 42,
+      height: 42,
+      borderRadius: 13,
+      backgroundColor:
+        colors.white,
+      borderWidth: 1,
+      borderColor:
+        colors.border,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+
+
+    headerText: {
+      flex: 1,
+      marginLeft: 11,
+    },
+
+
+    headerTitle: {
+      fontFamily: 'InterBold',
+      fontSize: 18,
+      color: colors.text,
+    },
+
+
+    headerSubtitle: {
+      fontFamily: 'InterRegular',
+      fontSize: 10,
+      color: colors.textMuted,
+      marginTop: 2,
+    },
+
+
+    activeBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor:
+        colors.accentLight,
+      paddingHorizontal: 9,
+      paddingVertical: 6,
+      borderRadius:
+        spacing.radiusRound,
+    },
+
+
+    activeDot: {
+      width: 6,
+      height: 6,
+      borderRadius: 3,
+      backgroundColor:
+        colors.accent,
+      marginRight: 5,
+    },
+
+
+    activeBadgeText: {
+      fontFamily: 'InterBold',
+      fontSize: 8,
+      color: colors.accent,
+    },
+
+
+    mapCard: {
+      backgroundColor:
+        colors.surface,
+      borderRadius:
+        spacing.radiusLarge,
+      borderWidth: 1,
+      borderColor:
+        colors.borderLight,
+      overflow: 'hidden',
+    },
+
+
+    mapArea: {
+      height: 190,
+      backgroundColor:
+        colors.mapBackground,
+      position: 'relative',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+
+
+    mapRoad1: {
+      position: 'absolute',
+      width: '120%',
+      height: 24,
+      backgroundColor:
+        colors.mapRoad,
+      transform: [
+        {
+          rotate: '18deg',
+        },
+      ],
+    },
+
+
+    mapRoad2: {
+      position: 'absolute',
+      width: '120%',
+      height: 18,
+      backgroundColor:
+        colors.mapRoad,
+      transform: [
+        {
+          rotate: '-32deg',
+        },
+      ],
+    },
+
+
+    locationPin: {
+      width: 54,
+      height: 54,
+      borderRadius: 27,
+      backgroundColor:
+        colors.white,
+      alignItems: 'center',
+      justifyContent: 'center',
+      elevation: 4,
+    },
+
+
+    locationLabel: {
+      marginTop: 7,
+      backgroundColor:
+        colors.white,
+      paddingHorizontal: 9,
+      paddingVertical: 5,
+      borderRadius: 8,
+    },
+
+
+    locationLabelText: {
+      fontFamily: 'InterMedium',
+      fontSize: 9,
+      color: colors.textSecondary,
+    },
+
+
+    locationBottom: {
+      padding: 13,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent:
+        'space-between',
+    },
+
+
+    locationInfo: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      flex: 1,
+    },
+
+
+    locationIcon: {
+      width: 38,
+      height: 38,
+      borderRadius: 11,
+      backgroundColor:
+        colors.accentLight,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginRight: 9,
+    },
+
+
+    locationTitle: {
+      fontFamily: 'InterSemiBold',
+      fontSize: 11,
+      color: colors.text,
+      maxWidth: 210,
+    },
+
+
+    locationSubtitle: {
+      fontFamily: 'InterRegular',
+      fontSize: 9,
+      color: colors.textMuted,
+      marginTop: 2,
+    },
+
+
+    navigateButton: {
+      height: 37,
+      borderRadius: 11,
+      backgroundColor:
+        colors.accent,
+      paddingHorizontal: 11,
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 5,
+    },
+
+
+    navigateText: {
+      fontFamily: 'InterSemiBold',
+      fontSize: 9,
+      color: colors.white,
+    },
+
+
+    sectionTitle: {
+      fontFamily: 'InterBold',
+      fontSize: 15,
+      color: colors.text,
+      marginTop: 20,
+      marginBottom: 10,
+    },
+
+
+    card: {
+      backgroundColor:
+        colors.surface,
+      borderRadius:
+        spacing.radiusLarge,
+      borderWidth: 1,
+      borderColor:
+        colors.borderLight,
+      padding:
+        spacing.cardPadding,
+    },
+
+
+    avatar: {
+      width: 45,
+      height: 45,
+      borderRadius: 14,
+      backgroundColor:
+        colors.accentLight,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginRight: 10,
+    },
+
+
+    avatarText: {
+      fontFamily: 'InterBold',
+      fontSize: 12,
+      color: colors.accent,
+    },
+
+
+    driverInfo: {
+      flex: 1,
+    },
+
+
+    driverName: {
+      fontFamily: 'InterSemiBold',
+      fontSize: 12,
+      color: colors.text,
+    },
+
+
+    driverVehicle: {
+      fontFamily: 'InterRegular',
+      fontSize: 9,
+      color: colors.textMuted,
+      marginTop: 3,
+    },
+
+
+    driverPhone: {
+      fontFamily: 'InterMedium',
+      fontSize: 9,
+      color: colors.textSecondary,
+      marginTop: 3,
+    },
+
+
+    callButton: {
+      width: 39,
+      height: 39,
+      borderRadius: 12,
+      backgroundColor:
+        colors.successLight,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+
+
+    detailRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+
+
+    detailIcon: {
+      width: 38,
+      height: 38,
+      borderRadius: 11,
+      backgroundColor:
+        colors.background,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginRight: 10,
+    },
+
+
+    detailText: {
+      flex: 1,
+    },
+
+
+    detailTitle: {
+      fontFamily: 'InterRegular',
+      fontSize: 9,
+      color: colors.textMuted,
+    },
+
+
+    detailValue: {
+      fontFamily: 'InterSemiBold',
+      fontSize: 12,
+      color: colors.text,
+      marginTop: 2,
+    },
+
+
+    divider: {
+      height: 1,
+      backgroundColor:
+        colors.borderLight,
+      marginVertical: 12,
+    },
+
+
+    statusCard: {
+      marginTop: 18,
+      backgroundColor:
+        colors.accentLight,
+      borderRadius:
+        spacing.radiusMedium,
+      padding: 13,
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+
+
+    statusIcon: {
+      width: 40,
+      height: 40,
+      borderRadius: 12,
+      backgroundColor:
+        colors.white,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginRight: 10,
+    },
+
+
+    statusIconSuccess: {
+      backgroundColor:
+        colors.successLight,
+    },
+
+
+    statusContent: {
+      flex: 1,
+    },
+
+
+    statusTitle: {
+      fontFamily: 'InterSemiBold',
+      fontSize: 11,
+      color: colors.text,
+    },
+
+
+    statusSubtitle: {
+      fontFamily: 'InterRegular',
+      fontSize: 9,
+      color: colors.textSecondary,
+      marginTop: 2,
+    },
+
+
+    bottomBar: {
+      position: 'absolute',
+      left: 0,
+      right: 0,
+      bottom: 0,
+      backgroundColor:
+        colors.surface,
+      borderTopWidth: 1,
+      borderTopColor:
+        colors.borderLight,
+      paddingHorizontal:
+        spacing.screenHorizontal,
+      paddingVertical: 10,
+    },
+
+
+    primaryButton: {
+      height:
+        spacing.buttonHeight,
+      borderRadius: 15,
+      backgroundColor:
+        colors.accent,
+      paddingLeft: 18,
+      paddingRight: 7,
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+
+
+    primaryButtonDisabled: {
+      opacity: 0.7,
+    },
+
+
+    primaryButtonText: {
+      flex: 1,
+      fontFamily: 'InterBold',
+      fontSize: 11,
+      color: colors.white,
+    },
+
+
+    buttonIcon: {
+      width: 39,
+      height: 39,
+      borderRadius: 11,
+      backgroundColor:
+        colors.accentDark,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+
+
+    loadingButtonContent: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 10,
+    },
+
+  });

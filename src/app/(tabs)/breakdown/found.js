@@ -1,304 +1,337 @@
+
 import {
-  Alert,
   Linking,
   ScrollView,
   StyleSheet,
   Text,
   TouchableOpacity,
-  View,
+  View
 } from 'react-native';
 
 import { Ionicons } from '@expo/vector-icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { useEffect, useState } from 'react';
 
+import {
+  getServiceRequestById,
+} from '../../../services/requestService';
+
+import {
+  useEffect,
+  useRef,
+  useState
+} from 'react';
 import colors from '../../../constants/colors';
-import { getActiveServiceRequest } from '../../../services/requestService';
 
 export default function FoundScreen() {
   const router = useRouter();
   const params = useLocalSearchParams();
 
-  const [activeRequest, setActiveRequest] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const requestId =
+    Array.isArray(params.requestId)
+      ? params.requestId[0]
+      : params.requestId;
 
-  // =====================================================
-  // LOAD ACTIVE REQUEST
-  // =====================================================
+  // =======================================================
+  // ARRIVAL NAVIGATION GUARD
+  // =======================================================
+
+  const arrivalNavigationRef =
+    useRef(false);
+
+  const [
+    activeRequest,
+    setActiveRequest,
+  ] = useState(null);
+
+  const [
+    checkingAssignment,
+    setCheckingAssignment,
+  ] = useState(true);
+
+  // =======================================================
+  // CHECK DRIVER REQUEST STATUS
+  // =======================================================
+  //
+  // The previous screen was completely static.
+  // Poll the backend so that when the mechanic accepts:
+  // SEARCHING -> ASSIGNED
+  // the driver immediately receives the real mechanic data.
+  // =======================================================
 
   useEffect(() => {
-    loadActiveRequest();
-  }, []);
 
-  async function loadActiveRequest() {
-    try {
-      setLoading(true);
+    let mounted = true;
 
-      console.log(
-        '[DRIVER FOUND] Loading active service request...'
+    const loadRequestStatus = async () => {
+
+      try {
+
+        if (!requestId) {
+          console.error(
+            '[DRIVER FOUND] Missing requestId while checking status.'
+          );
+          return;
+        }
+
+        const response =
+          await getServiceRequestById(
+            String(requestId)
+          );
+
+        if (!mounted) {
+          return;
+        }
+
+        console.log(
+          '[DRIVER FOUND] Active request:',
+          JSON.stringify(
+            response,
+            null,
+            2
+          )
+        );
+
+        setActiveRequest(response);
+
+      } catch (error) {
+
+        console.error(
+          '[DRIVER FOUND] Status check failed:',
+          error
+        );
+
+      } finally {
+
+        if (mounted) {
+          setCheckingAssignment(false);
+        }
+
+      }
+    };
+
+    loadRequestStatus();
+
+    const interval =
+      setInterval(
+        loadRequestStatus,
+        3000
       );
 
-      const response =
-        await getActiveServiceRequest();
+    return () => {
 
-      console.log(
-        '[DRIVER FOUND] Active request:',
-        JSON.stringify(response, null, 2)
-      );
+      mounted = false;
+      clearInterval(interval);
 
-      setActiveRequest(response);
+    };
 
-    } catch (error) {
+  }, [
+    requestId,
+  ]);
 
-      console.error(
-        '[DRIVER FOUND] Failed to load active request:',
-        error
-      );
-
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  // =====================================================
-  // DATA
-  // =====================================================
+  const request =
+    activeRequest;
 
   const mechanic =
-    activeRequest?.mechanic;
+    request?.mechanic || null;
 
   const vehicle =
-    activeRequest?.vehicle;
+    request?.vehicle || null;
 
-  const category =
-    activeRequest?.category ||
-    params.type ||
-    '';
+  const status =
+    String(
+      request?.status ||
+      'SEARCHING'
+    )
+      .trim()
+      .toUpperCase();
+
+  const serviceTitle =
+    request?.category === 'BATTERY'
+      ? 'Battery Assistance'
+      : request?.category === 'TYRE'
+        ? 'Tyre Assistance'
+        : request?.category === 'FUEL'
+          ? 'Fuel Assistance'
+          : request?.category === 'BREAKDOWN'
+            ? 'Breakdown Assistance'
+            : 'Roadside Assistance';
 
   const vehicleNumber =
     vehicle?.registrationNumber ||
     params.vehicleNumber ||
-    'Vehicle not available';
+    'Vehicle';
 
-  const location =
-    activeRequest?.address ||
-    'Location not available';
-
-  const status =
-    activeRequest?.status ||
-    'ASSIGNED';
+  const locationText =
+    request?.address ||
+    'Current GPS location';
 
   const mechanicName =
     mechanic?.name ||
-    'Mechanic';
+    'Finding mechanic...';
 
   const mechanicRating =
-    Number(mechanic?.rating ?? 0);
+    mechanic?.rating !== null &&
+    mechanic?.rating !== undefined
+      ? Number(mechanic.rating).toFixed(1)
+      : '--';
 
-  const totalJobs =
-    Number(mechanic?.totalJobs ?? 0);
+  const mechanicJobs =
+    mechanic?.totalJobs ?? 0;
 
-  const experienceYears =
-    mechanic?.experienceYears;
+  const statusLabel =
+    status === 'MECHANIC_EN_ROUTE'
+      ? 'ON THE WAY'
+      : status === 'ARRIVED'
+        ? 'ARRIVED'
+        : status === 'IN_PROGRESS'
+          ? 'SERVICE IN PROGRESS'
+          : status === 'ASSIGNED'
+            ? 'MECHANIC ASSIGNED'
+            : 'SEARCHING';
 
-  const workshopName =
-    mechanic?.workshopName;
+  const etaMinutes = (() => {
 
-  // =====================================================
-  // DISPLAY HELPERS
-  // =====================================================
+    // ETA is not relevant once the mechanic has arrived.
+    if (
+      status === 'ARRIVED' ||
+      status === 'IN_PROGRESS' ||
+      status === 'PAYMENT_PENDING'
+    ) {
+      return null;
+    }
 
-  function getServiceName(value) {
+    if (!request || !mechanic) {
+      return null;
+    }
 
-    const serviceMap = {
-      BATTERY: 'Battery Assistance',
-      BREAKDOWN: 'Breakdown Assistance',
-      TYRE: 'Tyre Assistance',
-      FUEL: 'Fuel Assistance',
-    };
+    const lat1 = Number(request.latitude);
+    const lon1 = Number(request.longitude);
+    const lat2 = Number(mechanic.latitude);
+    const lon2 = Number(mechanic.longitude);
 
-    const normalized =
-      String(value || '')
+    if (
+      [lat1, lon1, lat2, lon2].some(
+        Number.isNaN
+      )
+    ) {
+      return null;
+    }
+
+    const toRad =
+      (value) => value * Math.PI / 180;
+
+    const dLat =
+      toRad(lat2 - lat1);
+
+    const dLon =
+      toRad(lon2 - lon1);
+
+    const a =
+      Math.sin(dLat / 2) ** 2 +
+      Math.cos(toRad(lat1)) *
+      Math.cos(toRad(lat2)) *
+      Math.sin(dLon / 2) ** 2;
+
+    const distanceKm =
+      6371 *
+      2 *
+      Math.atan2(
+        Math.sqrt(a),
+        Math.sqrt(1 - a)
+      );
+
+    // Approximate city ETA. Do not force a permanent 2-minute value.
+    if (distanceKm < 0.15) {
+      return 1;
+    }
+
+    const averageSpeedKmH = 25;
+
+    return Math.max(
+      1,
+      Math.ceil(
+        (distanceKm / averageSpeedKmH) * 60
+      )
+    );
+
+  })();
+
+  // =======================================================
+  // AUTOMATIC ARRIVAL -> SERVICE SCREEN
+  // =======================================================
+
+  useEffect(() => {
+
+    const normalizedStatus =
+      String(
+        activeRequest?.status || ''
+      )
+        .trim()
         .toUpperCase();
 
-    return (
-      serviceMap[normalized] ||
-      value ||
-      'Roadside Assistance'
-    );
-  }
-
-
-  function getStatusLabel(value) {
-
-    const statusMap = {
-      SEARCHING: 'SEARCHING',
-      ASSIGNED: 'ASSIGNED',
-      ACCEPTED: 'ACCEPTED',
-      EN_ROUTE: 'ON THE WAY',
-      MECHANIC_EN_ROUTE: 'ON THE WAY',
-      ARRIVED: 'ARRIVED',
-      IN_PROGRESS: 'IN PROGRESS',
-      COMPLETED: 'COMPLETED',
-      CANCELLED: 'CANCELLED',
-    };
-
-    const normalized =
-      String(value || '')
-        .toUpperCase();
-
-    return (
-      statusMap[normalized] ||
-      normalized ||
-      'ASSIGNED'
-    );
-  }
-
-
-  function getMechanicType() {
-
-    if (workshopName) {
-      return workshopName;
+    if (
+      normalizedStatus !== 'ARRIVED'
+    ) {
+      return;
     }
 
     if (
-      experienceYears !== null &&
-      experienceYears !== undefined
+      arrivalNavigationRef.current
     ) {
-      return `Roadside Mechanic • ${experienceYears} yrs experience`;
+      return;
     }
 
-    return 'Roadside Mechanic';
-  }
-
-
-  function getLocationText() {
-
-    if (
-      location &&
-      location !== 'Current GPS location'
-    ) {
-      return location;
-    }
-
-    if (
-      activeRequest?.latitude &&
-      activeRequest?.longitude
-    ) {
-      return `${Number(
-        activeRequest.latitude
-      ).toFixed(5)}, ${Number(
-        activeRequest.longitude
-      ).toFixed(5)}`;
-    }
-
-    return 'Current location';
-  }
-
-
-  function getEtaText() {
-
-    // We intentionally don't show a fake ETA.
-    // Live ETA will be implemented when mechanic
-    // tracking is connected.
-
-    if (
-      mechanic?.latitude !== null &&
-      mechanic?.latitude !== undefined &&
-      mechanic?.longitude !== null &&
-      mechanic?.longitude !== undefined
-    ) {
-
-      const driverLat =
-        Number(activeRequest?.latitude);
-
-      const driverLng =
-        Number(activeRequest?.longitude);
-
-      const mechanicLat =
-        Number(mechanic.latitude);
-
-      const mechanicLng =
-        Number(mechanic.longitude);
-
-      const sameLocation =
-        Math.abs(driverLat - mechanicLat) < 0.00001 &&
-        Math.abs(driverLng - mechanicLng) < 0.00001;
-
-      if (sameLocation) {
-        return 'Nearby';
-      }
-    }
-
-    return 'Calculating';
-  }
-
-
-  // =====================================================
-  // CALL MECHANIC
-  // =====================================================
-
-  async function callMechanic() {
-
-    const phone =
-      mechanic?.phone;
-
-    if (!phone) {
-      Alert.alert(
-        'Phone number unavailable',
-        'The mechanic phone number is not available.'
+    if (!requestId) {
+      console.error(
+        '[DRIVER FOUND] ARRIVED received but requestId is missing.'
       );
 
       return;
     }
 
-    try {
+    arrivalNavigationRef.current = true;
 
-      await Linking.openURL(
-        `tel:${phone}`
-      );
+    console.log(
+      '[DRIVER FOUND] Mechanic has arrived'
+    );
 
-    } catch (error) {
+    console.log(
+      '[DRIVER FOUND] Navigating to service screen:',
+      requestId
+    );
 
-      console.error(
-        '[DRIVER FOUND] Unable to open phone:',
-        error
-      );
-
-      Alert.alert(
-        'Unable to call',
-        'Unable to open the phone dialer.'
-      );
-    }
-  }
-
-
-  // =====================================================
-  // TRACK MECHANIC
-  // =====================================================
-
-  function trackMechanic() {
-
-    router.push({
-      pathname: '/breakdown/active',
-
+    router.replace({
+      pathname: '/(tabs)/breakdown/service',
       params: {
         requestId:
-          activeRequest?.id || '',
-
-        type:
-          category,
-
-        vehicleNumber:
-          vehicleNumber,
+          String(requestId),
       },
     });
-  }
+
+  }, [
+    activeRequest?.status,
+    requestId,
+    router,
+  ]);
 
 
-  // =====================================================
-  // UI
-  // =====================================================
+  const handleCallMechanic = async () => {
+
+    if (!mechanic?.phone) {
+      return;
+    }
+
+    try {
+      await Linking.openURL(
+        `tel:${mechanic.phone}`
+      );
+    } catch (error) {
+      console.error(
+        '[DRIVER FOUND] Unable to call mechanic:',
+        error
+      );
+    }
+  };
 
   return (
     <View style={styles.container}>
@@ -318,11 +351,9 @@ export default function FoundScreen() {
 
         </View>
 
-
         <Text style={styles.title}>
           Mechanic found
         </Text>
-
 
         <Text style={styles.subtitle}>
           A verified mechanic is on the way to
@@ -330,40 +361,76 @@ export default function FoundScreen() {
         </Text>
 
 
-        {/* =================================================
-            ETA / STATUS
-        ================================================= */}
+        <View
+          style={[
+            styles.etaCard,
+            status === 'ARRIVED' &&
+              styles.arrivedEtaCard,
+          ]}
+        >
 
-        <View style={styles.etaCard}>
-
-          <View style={styles.etaIcon}>
+          <View
+            style={[
+              styles.etaIcon,
+              status === 'ARRIVED' &&
+                styles.arrivedEtaIcon,
+            ]}
+          >
 
             <Ionicons
-              name="time-outline"
+              name={
+                status === 'ARRIVED'
+                  ? 'checkmark-circle'
+                  : 'time-outline'
+              }
               size={24}
-              color={colors.accent}
+              color={
+                status === 'ARRIVED'
+                  ? colors.success
+                  : colors.accent
+              }
             />
 
           </View>
 
-
           <View style={styles.etaInfo}>
 
             <Text style={styles.etaLabel}>
-              ESTIMATED ARRIVAL
+              {status === 'ARRIVED'
+                ? 'MECHANIC ARRIVAL'
+                : 'ESTIMATED ARRIVAL'}
             </Text>
 
             <Text style={styles.etaValue}>
-              {getEtaText()}
+              {status === 'ARRIVED'
+                ? 'Mechanic has arrived'
+                : etaMinutes !== null
+                  ? `${etaMinutes} minutes`
+                  : checkingAssignment
+                    ? 'Waiting...'
+                    : 'Calculating...'}
             </Text>
 
           </View>
 
+          <View
+            style={[
+              styles.etaBadge,
+              status === 'ARRIVED' &&
+                styles.arrivedEtaBadge,
+            ]}
+          >
 
-          <View style={styles.etaBadge}>
-
-            <Text style={styles.etaBadgeText}>
-              {getStatusLabel(status)}
+            <Text
+              style={[
+                styles.etaBadgeText,
+                status === 'ARRIVED' &&
+                  styles.arrivedEtaBadgeText,
+              ]}
+            >
+              {status === 'ARRIVED'
+                ? 'ARRIVED'
+                : statusLabel}
             </Text>
 
           </View>
@@ -371,14 +438,9 @@ export default function FoundScreen() {
         </View>
 
 
-        {/* =================================================
-            MECHANIC
-        ================================================= */}
-
         <Text style={styles.sectionLabel}>
           YOUR MECHANIC
         </Text>
-
 
         <View style={styles.mechanicCard}>
 
@@ -392,20 +454,15 @@ export default function FoundScreen() {
 
           </View>
 
-
           <View style={styles.mechanicInfo}>
 
             <Text style={styles.name}>
-              {loading
-                ? 'Loading...'
-                : mechanicName}
+              {mechanicName}
             </Text>
-
 
             <Text style={styles.type}>
-              {getMechanicType()}
+              {mechanic?.workshopName || 'Roadside Mechanic'}
             </Text>
-
 
             <View style={styles.ratingRow}>
 
@@ -415,24 +472,22 @@ export default function FoundScreen() {
                 color={colors.warning}
               />
 
-
               <Text style={styles.rating}>
-                {mechanicRating.toFixed(1)}
+                {mechanicRating}
               </Text>
 
-
               <Text style={styles.jobs}>
-                • {totalJobs} jobs completed
+                • {mechanicJobs} jobs completed
               </Text>
 
             </View>
 
           </View>
 
-
           <TouchableOpacity
             style={styles.callButton}
-            onPress={callMechanic}
+            onPress={handleCallMechanic}
+            disabled={!mechanic?.phone}
           >
 
             <Ionicons
@@ -446,21 +501,15 @@ export default function FoundScreen() {
         </View>
 
 
-        {/* =================================================
-            REQUEST INFORMATION
-        ================================================= */}
-
         <View style={styles.infoCard}>
 
           <InfoRow
             icon="construct-outline"
             label="SERVICE"
-            value={getServiceName(category)}
+            value={serviceTitle}
           />
 
-
           <View style={styles.divider} />
-
 
           <InfoRow
             icon="car-outline"
@@ -468,22 +517,16 @@ export default function FoundScreen() {
             value={vehicleNumber}
           />
 
-
           <View style={styles.divider} />
-
 
           <InfoRow
             icon="location-outline"
             label="LOCATION"
-            value={getLocationText()}
+            value={locationText}
           />
 
         </View>
 
-
-        {/* =================================================
-            TRUST
-        ================================================= */}
 
         <View style={styles.trustCard}>
 
@@ -493,13 +536,11 @@ export default function FoundScreen() {
             color={colors.success}
           />
 
-
           <View style={styles.trustInfo}>
 
             <Text style={styles.trustTitle}>
               Verified mechanic
             </Text>
-
 
             <Text style={styles.trustText}>
               Identity and service credentials verified.
@@ -512,15 +553,35 @@ export default function FoundScreen() {
       </ScrollView>
 
 
-      {/* ===================================================
-          BOTTOM BAR
-      =================================================== */}
-
       <View style={styles.bottomBar}>
 
         <TouchableOpacity
           style={styles.primaryButton}
-          onPress={trackMechanic}
+          onPress={() => {
+            if (status === 'ARRIVED') {
+              router.replace({
+                pathname: '/(tabs)/breakdown/service',
+                params: {
+                  requestId:
+                    String(requestId || ''),
+                },
+              });
+
+              return;
+            }
+
+            router.push({
+              pathname: '/breakdown/active',
+              params: {
+                requestId:
+                  String(requestId || ''),
+                type:
+                  params.type || 'battery',
+                vehicleNumber:
+                  params.vehicleNumber || '',
+              },
+            });
+          }}
         >
 
           <Ionicons
@@ -529,11 +590,11 @@ export default function FoundScreen() {
             color={colors.white}
           />
 
-
           <Text style={styles.primaryText}>
-            TRACK MECHANIC
+            {status === 'ARRIVED'
+              ? 'START SERVICE'
+              : 'TRACK MECHANIC'}
           </Text>
-
 
           <Ionicons
             name="arrow-forward"
@@ -549,17 +610,7 @@ export default function FoundScreen() {
   );
 }
 
-
-// =========================================================
-// INFO ROW
-// =========================================================
-
-function InfoRow({
-  icon,
-  label,
-  value,
-}) {
-
+function InfoRow({ icon, label, value }) {
   return (
     <View style={styles.infoRow}>
 
@@ -573,13 +624,11 @@ function InfoRow({
 
       </View>
 
-
       <View style={styles.infoText}>
 
         <Text style={styles.infoLabel}>
           {label}
         </Text>
-
 
         <Text style={styles.infoValue}>
           {value}
@@ -591,24 +640,16 @@ function InfoRow({
   );
 }
 
-
-// =========================================================
-// STYLES
-// =========================================================
-
 const styles = StyleSheet.create({
-
   container: {
     flex: 1,
     backgroundColor: colors.background,
   },
 
-
   content: {
     padding: 20,
     paddingBottom: 110,
   },
-
 
   successIcon: {
     width: 70,
@@ -621,7 +662,6 @@ const styles = StyleSheet.create({
     marginTop: 20,
   },
 
-
   title: {
     fontFamily: 'InterExtraBold',
     fontSize: 26,
@@ -629,7 +669,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginTop: 18,
   },
-
 
   subtitle: {
     fontFamily: 'InterRegular',
@@ -640,7 +679,6 @@ const styles = StyleSheet.create({
     marginTop: 5,
   },
 
-
   etaCard: {
     backgroundColor: colors.accentLight,
     borderRadius: 18,
@@ -649,7 +687,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-
 
   etaIcon: {
     width: 46,
@@ -661,11 +698,9 @@ const styles = StyleSheet.create({
     marginRight: 11,
   },
 
-
   etaInfo: {
     flex: 1,
   },
-
 
   etaLabel: {
     fontFamily: 'InterBold',
@@ -674,14 +709,12 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
   },
 
-
   etaValue: {
     fontFamily: 'InterExtraBold',
     fontSize: 18,
     color: colors.text,
     marginTop: 3,
   },
-
 
   etaBadge: {
     backgroundColor: colors.successLight,
@@ -690,13 +723,29 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
   },
 
-
   etaBadgeText: {
     fontFamily: 'InterBold',
     fontSize: 8,
     color: colors.success,
   },
 
+  arrivedEtaCard: {
+    backgroundColor: colors.successLight,
+    borderWidth: 1,
+    borderColor: colors.success,
+  },
+
+  arrivedEtaIcon: {
+    backgroundColor: colors.white,
+  },
+
+  arrivedEtaBadge: {
+    backgroundColor: colors.white,
+  },
+
+  arrivedEtaBadgeText: {
+    color: colors.success,
+  },
 
   sectionLabel: {
     fontFamily: 'InterBold',
@@ -706,7 +755,6 @@ const styles = StyleSheet.create({
     marginTop: 25,
     marginBottom: 9,
   },
-
 
   mechanicCard: {
     backgroundColor: colors.white,
@@ -718,7 +766,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
 
-
   avatar: {
     width: 55,
     height: 55,
@@ -729,18 +776,15 @@ const styles = StyleSheet.create({
     marginRight: 11,
   },
 
-
   mechanicInfo: {
     flex: 1,
   },
-
 
   name: {
     fontFamily: 'InterBold',
     fontSize: 14,
     color: colors.text,
   },
-
 
   type: {
     fontFamily: 'InterRegular',
@@ -749,7 +793,6 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
 
-
   ratingRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -757,20 +800,17 @@ const styles = StyleSheet.create({
     marginTop: 5,
   },
 
-
   rating: {
     fontFamily: 'InterBold',
     fontSize: 10,
     color: colors.text,
   },
 
-
   jobs: {
     fontFamily: 'InterRegular',
     fontSize: 9,
     color: colors.textMuted,
   },
-
 
   callButton: {
     width: 43,
@@ -781,7 +821,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
 
-
   infoCard: {
     backgroundColor: colors.white,
     borderRadius: 18,
@@ -791,12 +830,10 @@ const styles = StyleSheet.create({
     marginTop: 20,
   },
 
-
   infoRow: {
     flexDirection: 'row',
     alignItems: 'center',
   },
-
 
   infoIcon: {
     width: 42,
@@ -808,11 +845,9 @@ const styles = StyleSheet.create({
     marginRight: 11,
   },
 
-
   infoText: {
     flex: 1,
   },
-
 
   infoLabel: {
     fontFamily: 'InterBold',
@@ -821,7 +856,6 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
   },
 
-
   infoValue: {
     fontFamily: 'InterSemiBold',
     fontSize: 12,
@@ -829,13 +863,11 @@ const styles = StyleSheet.create({
     marginTop: 3,
   },
 
-
   divider: {
     height: 1,
     backgroundColor: colors.borderLight,
     marginVertical: 12,
   },
-
 
   trustCard: {
     marginTop: 18,
@@ -846,12 +878,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
 
-
   trustInfo: {
     flex: 1,
     marginLeft: 9,
   },
-
 
   trustTitle: {
     fontFamily: 'InterSemiBold',
@@ -859,14 +889,12 @@ const styles = StyleSheet.create({
     color: colors.text,
   },
 
-
   trustText: {
     fontFamily: 'InterRegular',
     fontSize: 10,
     color: colors.textSecondary,
     marginTop: 2,
   },
-
 
   bottomBar: {
     position: 'absolute',
@@ -879,7 +907,6 @@ const styles = StyleSheet.create({
     padding: 20,
   },
 
-
   primaryButton: {
     height: 53,
     borderRadius: 15,
@@ -891,12 +918,10 @@ const styles = StyleSheet.create({
     gap: 9,
   },
 
-
   primaryText: {
     flex: 1,
     fontFamily: 'InterBold',
     fontSize: 12,
     color: colors.white,
   },
-
 });

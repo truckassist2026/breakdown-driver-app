@@ -1,5 +1,12 @@
+import {
+  useEffect,
+  useState,
+} from 'react';
 
 import {
+  ActivityIndicator,
+  Alert,
+  Linking,
   ScrollView,
   StyleSheet,
   Text,
@@ -8,15 +15,346 @@ import {
 } from 'react-native';
 
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+
+import {
+  useLocalSearchParams,
+  useRouter,
+} from 'expo-router';
 
 import colors from '../../../constants/colors';
 
+import {
+  getActiveServiceRequest,
+} from '../../../services/requestService';
+
 export default function ServiceScreen() {
+
   const router = useRouter();
+
+  const params = useLocalSearchParams();
+
+  const requestId =
+    Array.isArray(params.requestId)
+      ? params.requestId[0]
+      : params.requestId;
+
+  const [
+    request,
+    setRequest,
+  ] = useState(null);
+
+  const [
+    loading,
+    setLoading,
+  ] = useState(true);
+
+  const [
+    error,
+    setError,
+  ] = useState('');
+
+  // =======================================================
+  // LIVE BACKEND STATUS
+  // =======================================================
+  //
+  // Driver NEVER changes the service status.
+  // The mechanic changes it.
+  //
+  // ARRIVED
+  //   -> mechanic sees arrived
+  //
+  // IN_PROGRESS
+  //   -> driver automatically sees service in progress
+  //
+  // PAYMENT_PENDING
+  //   -> driver moves to payment
+  // =======================================================
+
+  useEffect(() => {
+
+    let mounted = true;
+
+    const loadRequest = async () => {
+
+      try {
+
+        const response =
+          await getActiveServiceRequest();
+
+        if (!mounted) {
+          return;
+        }
+
+        const responseId =
+          response?.id
+            ? String(response.id)
+            : '';
+
+        // If the active endpoint returned another request,
+        // do not replace the request shown by this screen.
+        if (
+          requestId &&
+          responseId &&
+          responseId !== String(requestId)
+        ) {
+          return;
+        }
+
+        console.log(
+          '[DRIVER SERVICE] Backend status:',
+          response?.status
+        );
+
+        setRequest(response);
+        setError('');
+
+      } catch (err) {
+
+        console.error(
+          '[DRIVER SERVICE] Status load failed:',
+          err
+        );
+
+        if (mounted) {
+          setError(
+            err?.message ||
+            'Unable to load live service status.'
+          );
+        }
+
+      } finally {
+
+        if (mounted) {
+          setLoading(false);
+        }
+
+      }
+    };
+
+    loadRequest();
+
+    const interval =
+      setInterval(
+        loadRequest,
+        2000
+      );
+
+    return () => {
+
+      mounted = false;
+
+      clearInterval(interval);
+
+    };
+
+  }, [requestId]);
+
+  const status =
+    String(
+      request?.status ||
+      'ARRIVED'
+    )
+      .trim()
+      .toUpperCase();
+
+  const mechanic =
+    request?.mechanic ||
+    null;
+
+  const vehicle =
+    request?.vehicle ||
+    null;
+
+  const category =
+    String(
+      request?.category ||
+      'OTHER'
+    ).toUpperCase();
+
+  const mechanicName =
+    mechanic?.name ||
+    'Your mechanic';
+
+  const mechanicPhone =
+    mechanic?.phone ||
+    '';
+
+  const mechanicRating =
+    mechanic?.rating !== null &&
+    mechanic?.rating !== undefined
+      ? Number(mechanic.rating).toFixed(1)
+      : '--';
+
+  const mechanicJobs =
+    mechanic?.totalJobs ?? 0;
+
+  const serviceTitle =
+    category === 'BATTERY'
+      ? 'Battery inspection'
+      : category === 'TYRE'
+        ? 'Tyre service'
+        : category === 'FUEL'
+          ? 'Fuel assistance'
+          : category === 'BREAKDOWN'
+            ? 'Vehicle breakdown service'
+            : 'Roadside assistance';
+
+  const serviceDescription =
+    request?.description ||
+    'Your mechanic is working on your vehicle.';
+
+  const vehicleName =
+    [
+      vehicle?.manufacturer,
+      vehicle?.model,
+    ]
+      .filter(Boolean)
+      .join(' ') ||
+    'Vehicle';
+
+  const vehicleNumber =
+    vehicle?.registrationNumber ||
+    'Vehicle number unavailable';
+
+  const isAccepted =
+    [
+      'ASSIGNED',
+      'MECHANIC_EN_ROUTE',
+      'ARRIVED',
+      'IN_PROGRESS',
+      'PAYMENT_PENDING',
+    ].includes(status);
+
+  const isEnRoute =
+    [
+      'MECHANIC_EN_ROUTE',
+      'ARRIVED',
+      'IN_PROGRESS',
+      'PAYMENT_PENDING',
+    ].includes(status);
+
+  const isArrived =
+    [
+      'ARRIVED',
+      'IN_PROGRESS',
+      'PAYMENT_PENDING',
+    ].includes(status);
+
+  const isInProgress =
+    [
+      'IN_PROGRESS',
+      'PAYMENT_PENDING',
+    ].includes(status);
+
+  const isPaymentPending =
+    status === 'PAYMENT_PENDING';
+
+  useEffect(() => {
+
+    if (!isPaymentPending || !requestId) {
+      return;
+    }
+
+    console.log(
+      '[DRIVER SERVICE] Payment pending - opening payment:',
+      requestId
+    );
+
+    router.replace({
+      pathname:
+        '/breakdown/payment',
+      params: {
+        requestId:
+          String(requestId),
+      },
+    });
+
+  }, [
+    isPaymentPending,
+    requestId,
+    router,
+  ]);
+
+  const handleCallMechanic = async () => {
+
+    if (!mechanicPhone) {
+      return;
+    }
+
+    try {
+
+      await Linking.openURL(
+        `tel:${mechanicPhone}`
+      );
+
+    } catch (err) {
+
+      console.error(
+        '[DRIVER SERVICE] Call failed:',
+        err
+      );
+
+    }
+  };
+
+  if (loading && !request) {
+
+    return (
+      <View style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator
+            size="large"
+            color={colors.accent}
+          />
+
+          <Text style={styles.loadingText}>
+            Loading live service status...
+          </Text>
+        </View>
+      </View>
+    );
+  }
+
+  if (error && !request) {
+
+    return (
+      <View style={styles.container}>
+        <View style={styles.loadingContainer}>
+
+          <Ionicons
+            name="alert-circle-outline"
+            size={36}
+            color={colors.accent}
+          />
+
+          <Text style={styles.errorTitle}>
+            Unable to load service
+          </Text>
+
+          <Text style={styles.errorText}>
+            {error}
+          </Text>
+
+          <TouchableOpacity
+            style={styles.retryButton}
+            onPress={() => router.back()}
+          >
+            <Text style={styles.retryText}>
+              GO BACK
+            </Text>
+          </TouchableOpacity>
+
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
+
+      {/* =================================================
+          HEADER
+      ================================================= */}
 
       <View style={styles.header}>
 
@@ -34,20 +372,27 @@ export default function ServiceScreen() {
         <View style={styles.headerInfo}>
 
           <Text style={styles.title}>
-            Service in Progress
+            {isInProgress
+              ? 'Service in Progress'
+              : 'Mechanic Arrived'}
           </Text>
 
           <Text style={styles.subtitle}>
-            Your vehicle is being serviced
+            {isInProgress
+              ? 'Your vehicle is being serviced'
+              : 'Your mechanic has reached your location'}
           </Text>
 
         </View>
 
         <View style={styles.statusBadge}>
+
           <View style={styles.statusDot} />
+
           <Text style={styles.statusText}>
-            ACTIVE
+            {status}
           </Text>
+
         </View>
 
       </View>
@@ -58,12 +403,20 @@ export default function ServiceScreen() {
         contentContainerStyle={styles.content}
       >
 
+        {/* =================================================
+            HERO
+        ================================================= */}
+
         <View style={styles.hero}>
 
           <View style={styles.heroIcon}>
 
             <Ionicons
-              name="construct"
+              name={
+                isInProgress
+                  ? 'construct'
+                  : 'location'
+              }
               size={34}
               color={colors.white}
             />
@@ -71,34 +424,45 @@ export default function ServiceScreen() {
           </View>
 
           <Text style={styles.heroTitle}>
-            Service in progress
+            {isInProgress
+              ? 'Service in progress'
+              : 'Mechanic arrived'}
           </Text>
 
           <Text style={styles.heroText}>
-            Kumar is working on your vehicle.
+            {isInProgress
+              ? `${mechanicName} is working on your vehicle.`
+              : `${mechanicName} has reached your location.`}
           </Text>
 
         </View>
 
 
+        {/* =================================================
+            MECHANIC
+        ================================================= */}
+
         <View style={styles.mechanicCard}>
 
           <View style={styles.avatar}>
+
             <Ionicons
               name="person"
               size={29}
               color={colors.accent}
             />
+
           </View>
 
           <View style={styles.mechanicInfo}>
 
             <Text style={styles.name}>
-              Kumar
+              {mechanicName}
             </Text>
 
             <Text style={styles.type}>
-              Roadside Mechanic
+              {mechanic?.workshopName ||
+                'Roadside Mechanic'}
             </Text>
 
             <View style={styles.ratingRow}>
@@ -110,18 +474,22 @@ export default function ServiceScreen() {
               />
 
               <Text style={styles.rating}>
-                4.8
+                {mechanicRating}
               </Text>
 
               <Text style={styles.jobs}>
-                • 326 jobs
+                • {mechanicJobs} jobs
               </Text>
 
             </View>
 
           </View>
 
-          <TouchableOpacity style={styles.callButton}>
+          <TouchableOpacity
+            style={styles.callButton}
+            onPress={handleCallMechanic}
+            disabled={!mechanicPhone}
+          >
 
             <Ionicons
               name="call"
@@ -134,6 +502,10 @@ export default function ServiceScreen() {
         </View>
 
 
+        {/* =================================================
+            CURRENT SERVICE
+        ================================================= */}
+
         <Text style={styles.sectionLabel}>
           CURRENT SERVICE
         </Text>
@@ -143,7 +515,15 @@ export default function ServiceScreen() {
           <View style={styles.workIcon}>
 
             <Ionicons
-              name="battery-half-outline"
+              name={
+                category === 'BATTERY'
+                  ? 'battery-half-outline'
+                  : category === 'TYRE'
+                    ? 'disc-outline'
+                    : category === 'FUEL'
+                      ? 'flame-outline'
+                      : 'construct-outline'
+              }
               size={24}
               color={colors.serviceBattery}
             />
@@ -153,12 +533,11 @@ export default function ServiceScreen() {
           <View style={styles.workInfo}>
 
             <Text style={styles.workTitle}>
-              Battery inspection
+              {serviceTitle}
             </Text>
 
             <Text style={styles.workText}>
-              Checking battery condition and electrical
-              connections.
+              {serviceDescription}
             </Text>
 
             <View style={styles.workingBadge}>
@@ -166,7 +545,9 @@ export default function ServiceScreen() {
               <View style={styles.workingDot} />
 
               <Text style={styles.workingText}>
-                IN PROGRESS
+                {isInProgress
+                  ? 'IN PROGRESS'
+                  : 'MECHANIC ARRIVED'}
               </Text>
 
             </View>
@@ -175,6 +556,45 @@ export default function ServiceScreen() {
 
         </View>
 
+
+        {/* =================================================
+            VEHICLE
+        ================================================= */}
+
+        <Text style={styles.sectionLabel}>
+          YOUR VEHICLE
+        </Text>
+
+        <View style={styles.vehicleCard}>
+
+          <View style={styles.vehicleIcon}>
+
+            <Ionicons
+              name="car-outline"
+              size={25}
+              color={colors.accent}
+            />
+
+          </View>
+
+          <View style={styles.vehicleInfo}>
+
+            <Text style={styles.vehicleTitle}>
+              {vehicleNumber}
+            </Text>
+
+            <Text style={styles.vehicleSubtitle}>
+              {vehicleName}
+            </Text>
+
+          </View>
+
+        </View>
+
+
+        {/* =================================================
+            SERVICE STATUS
+        ================================================= */}
 
         <Text style={styles.sectionLabel}>
           SERVICE STATUS
@@ -186,7 +606,7 @@ export default function ServiceScreen() {
             icon="checkmark"
             title="Request accepted"
             subtitle="Mechanic accepted your request"
-            completed
+            completed={isAccepted}
           />
 
           <View style={styles.timelineLine} />
@@ -195,7 +615,8 @@ export default function ServiceScreen() {
             icon="location"
             title="Mechanic arrived"
             subtitle="Mechanic reached your location"
-            completed
+            active={status === 'ARRIVED'}
+            completed={isInProgress}
           />
 
           <View style={styles.timelineLine} />
@@ -203,17 +624,53 @@ export default function ServiceScreen() {
           <Timeline
             icon="construct"
             title="Service in progress"
-            subtitle="Vehicle is currently being serviced"
-            active
+            subtitle={
+              isInProgress
+                ? 'Vehicle is currently being serviced'
+                : 'Waiting for mechanic to start service'
+            }
+            active={isInProgress}
+            completed={isPaymentPending}
           />
 
           <View style={styles.timelineLine} />
 
           <Timeline
-            icon="checkmark-circle-outline"
-            title="Service completed"
-            subtitle="Waiting for service completion"
+            icon="card-outline"
+            title="Payment pending"
+            subtitle={
+              isPaymentPending
+                ? 'Service completed. Payment is pending.'
+                : 'Waiting for service completion'
+            }
+            active={isPaymentPending}
           />
+
+        </View>
+
+
+        <View style={styles.liveCard}>
+
+          <View style={styles.liveIcon}>
+            <Ionicons
+              name="sync-outline"
+              size={20}
+              color={colors.accent}
+            />
+          </View>
+
+          <View style={styles.liveInfo}>
+
+            <Text style={styles.liveTitle}>
+              Live service status
+            </Text>
+
+            <Text style={styles.liveText}>
+              This screen updates automatically when
+              your mechanic changes the service status.
+            </Text>
+
+          </View>
 
         </View>
 
@@ -233,26 +690,6 @@ export default function ServiceScreen() {
 
         </View>
 
-
-        <TouchableOpacity
-          style={styles.demoButton}
-          onPress={() =>
-            router.push('/breakdown/completion')
-          }
-        >
-
-          <Ionicons
-            name="checkmark-circle-outline"
-            size={19}
-            color={colors.white}
-          />
-
-          <Text style={styles.demoText}>
-            SIMULATE SERVICE COMPLETION
-          </Text>
-
-        </TouchableOpacity>
-
       </ScrollView>
 
     </View>
@@ -266,14 +703,17 @@ function Timeline({
   completed,
   active,
 }) {
+
   return (
     <View style={styles.timelineRow}>
 
       <View
         style={[
           styles.timelineIcon,
-          completed && styles.timelineCompleted,
-          active && styles.timelineActive,
+          completed &&
+            styles.timelineCompleted,
+          active &&
+            styles.timelineActive,
         ]}
       >
 
@@ -294,7 +734,8 @@ function Timeline({
         <Text
           style={[
             styles.timelineTitle,
-            active && styles.timelineTitleActive,
+            active &&
+              styles.timelineTitleActive,
           ]}
         >
           {title}
@@ -311,6 +752,124 @@ function Timeline({
 }
 
 const styles = StyleSheet.create({
+  loadingContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 30,
+  },
+
+  loadingText: {
+    marginTop: 12,
+    fontFamily: 'InterMedium',
+    fontSize: 11,
+    color: colors.textMuted,
+  },
+
+  errorTitle: {
+    marginTop: 12,
+    fontFamily: 'InterBold',
+    fontSize: 17,
+    color: colors.text,
+  },
+
+  errorText: {
+    marginTop: 7,
+    fontFamily: 'InterRegular',
+    fontSize: 11,
+    color: colors.textMuted,
+    textAlign: 'center',
+  },
+
+  retryButton: {
+    marginTop: 20,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 13,
+    backgroundColor: colors.accent,
+  },
+
+  retryText: {
+    fontFamily: 'InterBold',
+    fontSize: 10,
+    color: colors.white,
+  },
+
+  vehicleCard: {
+    backgroundColor: colors.white,
+    borderRadius: 18,
+    padding: 15,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+
+  vehicleIcon: {
+    width: 48,
+    height: 48,
+    borderRadius: 15,
+    backgroundColor: colors.accentLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 11,
+  },
+
+  vehicleInfo: {
+    flex: 1,
+  },
+
+  vehicleTitle: {
+    fontFamily: 'InterBold',
+    fontSize: 13,
+    color: colors.text,
+  },
+
+  vehicleSubtitle: {
+    fontFamily: 'InterRegular',
+    fontSize: 10,
+    color: colors.textMuted,
+    marginTop: 3,
+  },
+
+  liveCard: {
+    marginTop: 16,
+    backgroundColor: colors.infoLight,
+    borderRadius: 15,
+    padding: 13,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 9,
+  },
+
+  liveIcon: {
+    width: 40,
+    height: 40,
+    borderRadius: 13,
+    backgroundColor: colors.white,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+
+  liveInfo: {
+    flex: 1,
+  },
+
+  liveTitle: {
+    fontFamily: 'InterBold',
+    fontSize: 11,
+    color: colors.text,
+  },
+
+  liveText: {
+    fontFamily: 'InterRegular',
+    fontSize: 9,
+    lineHeight: 14,
+    color: colors.textSecondary,
+    marginTop: 2,
+  },
+
+
   container: {
     flex: 1,
     backgroundColor: colors.background,
