@@ -26,47 +26,40 @@ import {
   getMyServiceRequests,
 } from '../../services/requestService';
 
+import colors from '../../constants/colors';
+
 
 // =========================================================
 // COLORS
 // =========================================================
-
+//
+// Use the shared Driver App color system.
+// Accent = Driver App blue (#2563EB), not orange.
+//
 const COLORS = {
-  background: '#F8FAFC',
+  background: colors.background,
+  white: colors.white,
+  primary: colors.primary,
+  text: colors.text,
+  textSecondary: colors.textSecondary,
+  textMuted: colors.textMuted,
+  border: colors.border,
 
-  white: '#FFFFFF',
+  accent: colors.accent,
+  accentLight: colors.accentLight,
 
-  primary: '#0F172A',
+  blue: colors.info,
+  blueLight: colors.infoLight,
 
-  text: '#0F172A',
+  green: colors.success,
+  greenLight: colors.successLight,
 
-  textSecondary: '#475569',
+  yellow: colors.warning,
+  yellowLight: colors.warningLight,
 
-  textMuted: '#64748B',
-
-  border: '#E2E8F0',
-
-  accent: '#F97316',
-
-  accentLight: '#FFF7ED',
-
-  blue: '#2563EB',
-
-  blueLight: '#EFF6FF',
-
-  green: '#16A34A',
-
-  greenLight: '#F0FDF4',
-
-  yellow: '#CA8A04',
-
-  yellowLight: '#FEFCE8',
-
-  red: '#DC2626',
-
-  redLight: '#FEF2F2',
+  red: colors.danger,
+  redLight: colors.dangerLight,
 };
-
 
 // =========================================================
 // STATUS
@@ -79,48 +72,48 @@ function getStatusConfig(status) {
     case 'CREATED':
       return {
         label: 'Request Created',
-        color: COLORS.blue,
-        background: COLORS.blueLight,
+        color: colors.warning,
+        background: colors.warningLight,
         icon: 'document-text-outline',
       };
 
     case 'SEARCHING':
       return {
         label: 'Finding Mechanic',
-        color: COLORS.accent,
-        background: COLORS.accentLight,
+        color: colors.warning,
+        background: colors.warningLight,
         icon: 'search-outline',
       };
 
     case 'ASSIGNED':
       return {
         label: 'Mechanic Assigned',
-        color: COLORS.blue,
-        background: COLORS.blueLight,
+        color: colors.info,
+        background: colors.infoLight,
         icon: 'person-outline',
       };
 
     case 'MECHANIC_EN_ROUTE':
       return {
         label: 'Mechanic On The Way',
-        color: COLORS.accent,
-        background: COLORS.accentLight,
+        color: colors.info,
+        background: colors.infoLight,
         icon: 'navigate-outline',
       };
 
     case 'ARRIVED':
       return {
         label: 'Mechanic Arrived',
-        color: COLORS.green,
-        background: COLORS.greenLight,
+        color: colors.success,
+        background: colors.successLight,
         icon: 'location-outline',
       };
 
     case 'IN_PROGRESS':
       return {
         label: 'Service In Progress',
-        color: COLORS.blue,
-        background: COLORS.blueLight,
+        color: colors.accent,
+        background: colors.accentLight,
         icon: 'construct-outline',
       };
 
