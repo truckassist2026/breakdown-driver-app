@@ -983,11 +983,13 @@ export default function HomeScreen() {
               activeOpacity={0.85}
               onPress={() =>
                 router.push({
-                  pathname: "/breakdown/category",
+                  pathname: "/breakdown/details",
                   params: {
-                    category: item.category,
+                    categoryCode: item.category,
                     vehicleId: primaryVehicle?.id || "",
-                    vehicleNumber: primaryVehicle?.registrationNumber || "",
+                    vehicleNumber:
+                      primaryVehicle?.registrationNumber || "",
+                    quick: "true",
                   },
                 })
               }

@@ -42,6 +42,10 @@ export default function DetailsScreen() {
     ? params.categoryCode[0]
     : params.categoryCode || '';
 
+  const quick = Array.isArray(params.quick)
+    ? params.quick[0]
+    : params.quick || '';
+
   // =====================================================
   // STATE
   // =====================================================
@@ -63,8 +67,17 @@ export default function DetailsScreen() {
   // =====================================================
 
   useEffect(() => {
+    // Quick Assistance can open this screen repeatedly with
+    // different categoryCode values (Tyre -> Battery -> Fuel).
+    // Reload whenever the route selection changes so the previous
+    // assistance is never retained.
+    setSelectedCategory(null);
+    setSelectedVehicle(null);
+    setDescription('');
+    setError('');
+
     loadData();
-  }, []);
+  }, [categoryId, categoryCode, quick]);
 
   async function loadData() {
     try {
@@ -90,7 +103,17 @@ export default function DetailsScreen() {
 
       let category = null;
 
-      if (categoryId) {
+      // Quick Assistance is driven by categoryCode.
+      // Prefer the current code so an older categoryId cannot win.
+      if (categoryCode) {
+        category = categories.find(
+          item =>
+            String(item.code).toUpperCase() ===
+            String(categoryCode).toUpperCase()
+        );
+      }
+
+      if (!category && categoryId) {
         category = categories.find(
           item =>
             String(item.id) ===
@@ -108,7 +131,9 @@ export default function DetailsScreen() {
 
       if (!category) {
         throw new Error(
-          'The selected assistance could not be found.'
+          quick === 'true'
+            ? 'The selected quick assistance could not be found.'
+            : 'The selected assistance could not be found.'
         );
       }
 
@@ -207,6 +232,9 @@ export default function DetailsScreen() {
 
         description:
           description.trim(),
+
+        quick:
+          quick === 'true' ? 'true' : 'false',
       },
     });
 
