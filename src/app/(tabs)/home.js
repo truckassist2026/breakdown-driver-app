@@ -8,7 +8,7 @@ import {
   View,
 } from "react-native";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useState } from "react";
 
 import { Ionicons } from "@expo/vector-icons";
 
@@ -302,15 +302,6 @@ export default function HomeScreen() {
 
   const [activeRequest, setActiveRequest] = useState(null);
 
-  // =======================================================
-  // ACTIVE REQUEST NAVIGATION GUARD
-  // =======================================================
-  //
-  // Prevents Home from repeatedly navigating to the same
-  // active request every time the screen refreshes.
-  //
-  const activeRequestNavigationRef = useRef(null);
-
   const [loadingActiveRequest, setLoadingActiveRequest] = useState(true);
 
   const [cancellingRequest, setCancellingRequest] = useState(false);
@@ -435,15 +426,52 @@ export default function HomeScreen() {
 
       console.log("[Truck Assist] Active request:", response);
 
+      const status = String(response?.status || "")
+        .trim()
+        .toUpperCase();
+
+      console.log(
+        "[Truck Assist] Active request status:",
+        status,
+      );
+
+      // =====================================================
+      // COMPLETED / CANCELLED ARE NOT ACTIVE
+      // =====================================================
+
+      if (
+        status === "COMPLETED" ||
+        status === "CANCELLED"
+      ) {
+        console.log(
+          "[Truck Assist] Request is completed/cancelled. " +
+            "Removing from Active Service.",
+        );
+
+        setActiveRequest(null);
+        return;
+      }
+
+      // =====================================================
+      // VALID ACTIVE REQUEST
+      // =====================================================
+
       setActiveRequest(response || null);
     } catch (error) {
       // 404 means there is no active request.
       // This is a normal state.
 
       if (error?.status === 404) {
+        console.log(
+          "[Truck Assist] No active service request.",
+        );
+
         setActiveRequest(null);
       } else {
-        console.error("Unable to load active service:", error);
+        console.error(
+          "Unable to load active service:",
+          error,
+        );
 
         setActiveRequest(null);
       }
@@ -507,138 +535,6 @@ export default function HomeScreen() {
       refreshHome();
     }, [refreshHome]),
   );
-
-  // =======================================================
-  // AUTOMATIC ACTIVE REQUEST RESUME
-  // =======================================================
-  //
-  // If the driver leaves the active breakdown screen and
-  // later returns to Home, recover the live request from
-  // /api/v1/requests/active and return to the correct
-  // breakdown screen.
-  //
-  // CREATED / SEARCHING
-  //     -> Searching
-  //
-  // ASSIGNED / MECHANIC_EN_ROUTE / EN_ROUTE
-  //     -> Mechanic Found / Assigned
-  //
-  // ARRIVED / IN_PROGRESS / PAYMENT_PENDING
-  //     -> Service
-  //
-  // COMPLETED / CANCELLED
-  //     -> Stay in normal Home / Requests flow
-  // =======================================================
-
-  useEffect(() => {
-    if (!activeRequest?.id) {
-      return;
-    }
-
-    const requestId = String(activeRequest.id);
-
-    const status = String(activeRequest.status || "")
-      .trim()
-      .toUpperCase();
-
-    const navigationKey = `${requestId}:${status}`;
-
-    console.log(
-      "[Truck Assist] Active request resume check:",
-      requestId,
-      "Status:",
-      status,
-    );
-
-    // Prevent repeated navigation for the same request/status.
-    if (
-      activeRequestNavigationRef.current ===
-      navigationKey
-    ) {
-      return;
-    }
-
-    const activeStatuses = [
-      "CREATED",
-      "SEARCHING",
-      "ASSIGNED",
-      "MECHANIC_EN_ROUTE",
-      "EN_ROUTE",
-      "ARRIVED",
-      "IN_PROGRESS",
-      "PAYMENT_PENDING",
-    ];
-
-    if (!activeStatuses.includes(status)) {
-      return;
-    }
-
-    activeRequestNavigationRef.current =
-      navigationKey;
-
-    // -------------------------------------------------------
-    // SEARCHING
-    // -------------------------------------------------------
-
-    if (
-      status === "CREATED" ||
-      status === "SEARCHING"
-    ) {
-      router.replace({
-        pathname: "/breakdown/searching",
-        params: {
-          requestId,
-        },
-      });
-
-      return;
-    }
-
-    // -------------------------------------------------------
-    // MECHANIC ASSIGNED / ON THE WAY
-    // -------------------------------------------------------
-
-    if (
-      status === "ASSIGNED" ||
-      status === "MECHANIC_EN_ROUTE" ||
-      status === "EN_ROUTE"
-    ) {
-      router.replace({
-        pathname: "/breakdown/found",
-        params: {
-          requestId,
-          type: String(
-            activeRequest.category || ""
-          ).toLowerCase(),
-          vehicleNumber:
-            activeRequest?.vehicle
-              ?.registrationNumber || "",
-        },
-      });
-
-      return;
-    }
-
-    // -------------------------------------------------------
-    // MECHANIC ARRIVED / SERVICE
-    // -------------------------------------------------------
-
-    if (
-      status === "ARRIVED" ||
-      status === "IN_PROGRESS" ||
-      status === "PAYMENT_PENDING"
-    ) {
-      router.replace({
-        pathname: "/(tabs)/breakdown/service",
-        params: {
-          requestId,
-        },
-      });
-    }
-  }, [
-    activeRequest,
-    router,
-  ]);
 
   // =========================================================
   // OPEN REQUEST / RESUME ACTIVE BREAKDOWN
@@ -881,7 +777,13 @@ export default function HomeScreen() {
             ACTIVE SERVICE
             ================================================= */}
 
-        {!loadingActiveRequest && activeRequest && (
+        {!loadingActiveRequest &&
+          activeRequest &&
+          !["COMPLETED", "CANCELLED"].includes(
+            String(activeRequest.status || "")
+              .trim()
+              .toUpperCase(),
+          ) && (
           <View style={styles.activeServiceCard}>
             {/* -------------------------------------------
                   ACTIVE HEADER
