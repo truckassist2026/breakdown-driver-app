@@ -22,6 +22,8 @@ import {
   getServiceRequestHistory,
 } from '../../services/requestService';
 
+import { apiRequest } from '../../services/api';
+
 
 // =========================================================
 // HELPERS
@@ -301,6 +303,11 @@ export default function RequestDetailsScreen() {
   ] = useState([]);
 
   const [
+    payment,
+    setPayment,
+  ] = useState(null);
+
+  const [
     loading,
     setLoading,
   ] = useState(true);
@@ -398,6 +405,7 @@ export default function RequestDetailsScreen() {
           const [
             requestResponse,
             historyResponse,
+            paymentResponse,
           ] =
             await Promise.all([
               getServiceRequestById(
@@ -405,6 +413,14 @@ export default function RequestDetailsScreen() {
               ),
               getServiceRequestHistory(
                 requestId
+              ),
+              apiRequest(
+                `/api/v1/payments/requests/${encodeURIComponent(
+                  String(requestId)
+                )}`,
+                {
+                  method: 'GET',
+                }
               ),
             ]);
 
@@ -438,6 +454,10 @@ export default function RequestDetailsScreen() {
               : []
           );
 
+          setPayment(
+            paymentResponse || null
+          );
+
         } catch (loadError) {
 
           console.error(
@@ -448,6 +468,8 @@ export default function RequestDetailsScreen() {
           setRequest(null);
 
           setHistory([]);
+
+          setPayment(null);
 
           setError(
             loadError?.message ||
@@ -471,6 +493,24 @@ export default function RequestDetailsScreen() {
     loadRequest();
 
   }, [loadRequest]);
+
+
+  // =======================================================
+  // VIEW INVOICE
+  // =======================================================
+
+  const handleViewInvoice = useCallback(() => {
+    if (!requestId) {
+      return;
+    }
+
+    router.push({
+      pathname: '/breakdown/invoice',
+      params: {
+        requestId: String(requestId),
+      },
+    });
+  }, [requestId, router]);
 
 
   // =======================================================
@@ -1097,6 +1137,60 @@ export default function RequestDetailsScreen() {
 
 
         {/* =================================================
+            PAYMENT / INVOICE
+        ================================================= */}
+
+        {request.status === 'COMPLETED' &&
+        payment &&
+        ['PAID', 'SUCCESS', 'COMPLETED'].includes(
+          String(payment.status || '')
+            .trim()
+            .toUpperCase()
+        ) ? (
+          <View style={styles.invoiceCard}>
+            <View style={styles.invoiceInfo}>
+              <View style={styles.invoiceIcon}>
+                <Ionicons
+                  name="receipt-outline"
+                  size={20}
+                  color={colors.success}
+                />
+              </View>
+
+              <View style={styles.invoiceTextContainer}>
+                <Text style={styles.invoiceTitle}>
+                  Payment Completed
+                </Text>
+
+                <Text style={styles.invoiceSubtitle}>
+                  ₹{Number(payment.amount || 0).toFixed(0)} •{' '}
+                  {String(
+                    payment.paymentMethod || 'Payment'
+                  ).toUpperCase()}
+                </Text>
+              </View>
+            </View>
+
+            <TouchableOpacity
+              style={styles.invoiceButton}
+              activeOpacity={0.85}
+              onPress={handleViewInvoice}
+            >
+              <Ionicons
+                name="document-text-outline"
+                size={18}
+                color={colors.white}
+              />
+
+              <Text style={styles.invoiceButtonText}>
+                VIEW INVOICE
+              </Text>
+            </TouchableOpacity>
+          </View>
+        ) : null}
+
+
+        {/* =================================================
             CANCEL
         ================================================= */}
 
@@ -1476,6 +1570,68 @@ const styles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 17,
     color: colors.textMuted,
+  },
+
+  // -------------------------------------------------------
+  // INVOICE
+  // -------------------------------------------------------
+
+  invoiceCard: {
+    padding: 16,
+    borderRadius: 18,
+    backgroundColor: colors.white,
+    marginBottom: 14,
+    borderWidth: 1,
+    borderColor: colors.borderLight,
+  },
+
+  invoiceInfo: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 13,
+  },
+
+  invoiceIcon: {
+    width: 42,
+    height: 42,
+    borderRadius: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.successLight,
+  },
+
+  invoiceTextContainer: {
+    flex: 1,
+    marginLeft: 11,
+  },
+
+  invoiceTitle: {
+    fontFamily: 'InterSemiBold',
+    fontSize: 14,
+    color: colors.text,
+  },
+
+  invoiceSubtitle: {
+    marginTop: 3,
+    fontFamily: 'InterRegular',
+    fontSize: 11,
+    color: colors.textMuted,
+  },
+
+  invoiceButton: {
+    minHeight: 48,
+    borderRadius: 13,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.accent,
+    gap: 8,
+  },
+
+  invoiceButtonText: {
+    fontFamily: 'InterSemiBold',
+    fontSize: 12,
+    color: colors.white,
   },
 
   cancelButton: {

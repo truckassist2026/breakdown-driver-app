@@ -227,17 +227,20 @@ export default function PaymentSuccessScreen() {
   // =======================================================
 
   const handleViewInvoice = () => {
-    /*
-     * Invoice API/PDF generation is not currently part of
-     * the confirmed payment flow.
-     *
-     * Do not invent an endpoint here.
-     */
+    if (!requestId) {
+      Alert.alert(
+        "Invoice",
+        "Request ID is missing.",
+      );
+      return;
+    }
 
-    Alert.alert(
-      "Invoice",
-      "Your payment has been successfully recorded. Invoice viewing will be available here.",
-    );
+    router.push({
+      pathname: "/breakdown/invoice",
+      params: {
+        requestId: String(requestId),
+      },
+    });
   };
 
   // =======================================================
