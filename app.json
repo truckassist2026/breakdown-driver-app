@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "breakdown-driver-app",
+    "name": "Truck Assist Driver",
     "slug": "breakdown-driver-app",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -11,12 +11,6 @@
       "icon": "./assets/expo.icon"
     },
     "android": {
-      "adaptiveIcon": {
-        "backgroundColor": "#E6F4FE",
-        "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
-        "monochromeImage": "./assets/images/android-icon-monochrome.png"
-      },
       "predictiveBackGestureEnabled": false,
       "package": "com.truckassist.driver"
     },
