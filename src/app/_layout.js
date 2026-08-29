@@ -1,137 +1,82 @@
-import { useFonts } from '@expo-google-fonts/inter';
+import { useFonts } from "@expo-google-fonts/inter";
 
-import {
-  Stack,
-  useRouter,
-  useSegments,
-} from 'expo-router';
+import { Stack, useRouter, useSegments } from "expo-router";
 
-import * as SplashScreen from 'expo-splash-screen';
+import * as SplashScreen from "expo-splash-screen";
 
-import { StatusBar } from 'expo-status-bar';
+import { StatusBar } from "expo-status-bar";
 
-import {
-  useEffect,
-} from 'react';
+import { useEffect, useState } from "react";
 
 import {
   Inter_400Regular,
   Inter_500Medium,
   Inter_600SemiBold,
   Inter_700Bold,
-} from '@expo-google-fonts/inter';
+} from "@expo-google-fonts/inter";
 
-import {
-  View,
-} from 'react-native';
+import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
 
-import {
-  SafeAreaProvider,
-  SafeAreaView,
-} from 'react-native-safe-area-context';
+import { AuthProvider, useAuth } from "../context/AuthContext";
 
-import {
-  AuthProvider,
-  useAuth,
-} from '../context/AuthContext';
-
+import LaunchScreen from "../components/LaunchScreen";
 
 // =========================================================
-// KEEP SPLASH SCREEN WHILE LOADING
+// KEEP NATIVE SPLASH WHILE APP STARTS
 // =========================================================
 
 SplashScreen.preventAutoHideAsync();
-
 
 // =========================================================
 // ROUTE GUARD
 // =========================================================
 
 function RootNavigator() {
+  const router = useRouter();
 
-  const router =
-    useRouter();
+  const segments = useSegments();
 
-  const segments =
-    useSegments();
-
-  const {
-    loading,
-    isAuthenticated,
-  } = useAuth();
-
+  const { loading, isAuthenticated } = useAuth();
 
   // =======================================================
   // AUTH ROUTING
   // =======================================================
 
   useEffect(() => {
-
     if (loading) {
       return;
     }
 
+    const firstSegment = segments[0];
 
-    const firstSegment =
-      segments[0];
+    const isAuthScreen = firstSegment === "login" || firstSegment === "otp";
 
-
-    const isAuthScreen =
-      firstSegment === 'login' ||
-      firstSegment === 'otp';
-
-
-    const isTabsScreen =
-      firstSegment === '(tabs)';
-
+    const isTabsScreen = firstSegment === "(tabs)";
 
     // =====================================================
     // NOT AUTHENTICATED
     // =====================================================
 
-    if (
-      !isAuthenticated &&
-      isTabsScreen
-    ) {
+    if (!isAuthenticated && isTabsScreen) {
+      console.log("[Router] No session → Login");
 
-      console.log(
-        '[Router] No session → Login'
-      );
-
-      router.replace(
-        '/login'
-      );
+      router.replace("/login");
 
       return;
     }
-
 
     // =====================================================
     // AUTHENTICATED
     // =====================================================
 
-    if (
-      isAuthenticated &&
-      isAuthScreen
-    ) {
+    if (isAuthenticated && isAuthScreen) {
+      console.log("[Router] Session exists → Home");
 
-      console.log(
-        '[Router] Session exists → Home'
-      );
-
-      router.replace(
-        '/(tabs)/home'
-      );
+      router.replace("/(tabs)/home");
 
       return;
     }
-
-  }, [
-    loading,
-    isAuthenticated,
-    segments,
-  ]);
-
+  }, [loading, isAuthenticated, segments]);
 
   // =======================================================
   // WAIT FOR AUTH RESTORE
@@ -141,122 +86,117 @@ function RootNavigator() {
     return null;
   }
 
-
   return (
     <SafeAreaView
       style={{
         flex: 1,
-        backgroundColor: '#F8FAFC',
+        backgroundColor: "#F8FAFC",
       }}
-      edges={[
-        'top',
-        'bottom',
-      ]}
+      edges={["top", "bottom"]}
     >
-
       <Stack
         screenOptions={{
           headerShown: false,
 
-          animation:
-            'slide_from_right',
+          animation: "slide_from_right",
 
           contentStyle: {
-            backgroundColor:
-              '#F8FAFC',
+            backgroundColor: "#F8FAFC",
           },
         }}
       >
+        <Stack.Screen name="index" />
 
-        <Stack.Screen
-          name="index"
-        />
+        <Stack.Screen name="login" />
 
-        <Stack.Screen
-          name="login"
-        />
+        <Stack.Screen name="otp" />
 
-        <Stack.Screen
-          name="otp"
-        />
-
-        <Stack.Screen
-          name="(tabs)"
-        />
-
+        <Stack.Screen name="(tabs)" />
       </Stack>
-
     </SafeAreaView>
   );
 }
 
+// =========================================================
+// APP CONTENT
+// =========================================================
+
+function AppContent() {
+  const [launchFinished, setLaunchFinished] = useState(false);
+
+  // =======================================================
+  // FULL SCREEN LAUNCH SCREEN
+  // =======================================================
+
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setLaunchFinished(true);
+    }, 1800);
+
+    return () => {
+      clearTimeout(timer);
+    };
+  }, []);
+
+  // =======================================================
+  // SHOW FULL LAUNCH SCREEN
+  // =======================================================
+
+  if (!launchFinished) {
+    return <LaunchScreen />;
+  }
+
+  // =======================================================
+  // NORMAL APPLICATION
+  // =======================================================
+
+  return (
+    <>
+      <StatusBar style="dark" translucent={false} />
+
+      <RootNavigator />
+    </>
+  );
+}
 
 // =========================================================
 // ROOT LAYOUT
 // =========================================================
 
 export default function RootLayout() {
+  const [fontsLoaded] = useFonts({
+    InterRegular: Inter_400Regular,
 
-  const [
-    fontsLoaded,
-  ] = useFonts({
+    InterMedium: Inter_500Medium,
 
-    InterRegular:
-      Inter_400Regular,
+    InterSemiBold: Inter_600SemiBold,
 
-    InterMedium:
-      Inter_500Medium,
-
-    InterSemiBold:
-      Inter_600SemiBold,
-
-    InterBold:
-      Inter_700Bold,
+    InterBold: Inter_700Bold,
   });
 
-
   // =======================================================
-  // HIDE SPLASH
+  // HIDE NATIVE SPLASH
   // =======================================================
 
   useEffect(() => {
-
     if (fontsLoaded) {
-
       SplashScreen.hideAsync();
-
     }
-
-  }, [
-    fontsLoaded,
-  ]);
-
+  }, [fontsLoaded]);
 
   // =======================================================
   // WAIT FOR FONTS
   // =======================================================
 
   if (!fontsLoaded) {
-
     return null;
   }
 
-
   return (
-
     <SafeAreaProvider>
-
       <AuthProvider>
-
-        <StatusBar
-          style="dark"
-          translucent={false}
-        />
-
-        <RootNavigator />
-
+        <AppContent />
       </AuthProvider>
-
     </SafeAreaProvider>
   );
 }
