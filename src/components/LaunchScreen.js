@@ -9,8 +9,8 @@ export default function LaunchScreen() {
 
       <Image
         source={require("../../assets/images/splash-icon.png")}
-        style={styles.image}
-        resizeMode="cover"
+        style={styles.logo}
+        resizeMode="contain"
       />
     </View>
   );
@@ -19,10 +19,14 @@ export default function LaunchScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
+    width: "100%",
+    height: "100%",
     backgroundColor: "#F4F8FF",
+    alignItems: "center",
+    justifyContent: "center",
   },
 
-  image: {
+  logo: {
     width: "100%",
     height: "100%",
   },

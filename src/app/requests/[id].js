@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from "react";
 
 import {
   ActivityIndicator,
@@ -9,21 +9,20 @@ import {
   Text,
   TouchableOpacity,
   View,
-} from 'react-native';
+} from "react-native";
 
-import { Ionicons } from '@expo/vector-icons';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Ionicons } from "@expo/vector-icons";
+import { useLocalSearchParams, useRouter } from "expo-router";
 
-import colors from '../../constants/colors';
+import colors from "../../constants/colors";
 
 import {
   cancelServiceRequest,
   getServiceRequestById,
   getServiceRequestHistory,
-} from '../../services/requestService';
+} from "../../services/requestService";
 
-import { apiRequest } from '../../services/api';
-
+import { apiRequest } from "../../services/api";
 
 // =========================================================
 // HELPERS
@@ -31,46 +30,38 @@ import { apiRequest } from '../../services/api';
 
 function formatDate(value) {
   if (!value) {
-    return '—';
+    return "—";
   }
 
   try {
-    return new Date(value).toLocaleDateString(
-      'en-IN',
-      {
-        day: '2-digit',
-        month: 'short',
-        year: 'numeric',
-      }
-    );
+    return new Date(value).toLocaleDateString("en-IN", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    });
   } catch {
-    return '—';
+    return "—";
   }
 }
-
 
 function formatTime(value) {
   if (!value) {
-    return '—';
+    return "—";
   }
 
   try {
-    return new Date(value).toLocaleTimeString(
-      'en-IN',
-      {
-        hour: '2-digit',
-        minute: '2-digit',
-      }
-    );
+    return new Date(value).toLocaleTimeString("en-IN", {
+      hour: "2-digit",
+      minute: "2-digit",
+    });
   } catch {
-    return '—';
+    return "—";
   }
 }
 
-
 function formatDateTime(value) {
   if (!value) {
-    return '—';
+    return "—";
   }
 
   const date = formatDate(value);
@@ -79,172 +70,124 @@ function formatDateTime(value) {
   return `${date} ${time}`;
 }
 
-
 function getCategoryLabel(category) {
   const map = {
-    BREAKDOWN: 'Breakdown',
-    TYRE: 'Tyre Issue',
-    BATTERY: 'Battery Issue',
-    FUEL: 'Fuel Issue',
-    OTHER: 'Other',
+    BREAKDOWN: "Breakdown",
+    TYRE: "Tyre Issue",
+    BATTERY: "Battery Issue",
+    FUEL: "Fuel Issue",
+    OTHER: "Other",
   };
 
-  return map[category] || category || 'Service Request';
+  return map[category] || category || "Service Request";
 }
-
 
 function getCategoryIcon(category) {
   const map = {
-    BREAKDOWN: 'warning-outline',
-    TYRE: 'disc-outline',
-    BATTERY: 'battery-half-outline',
-    FUEL: 'water-outline',
-    OTHER: 'construct-outline',
+    BREAKDOWN: "warning-outline",
+    TYRE: "disc-outline",
+    BATTERY: "battery-half-outline",
+    FUEL: "water-outline",
+    OTHER: "construct-outline",
   };
 
-  return map[category] || 'construct-outline';
+  return map[category] || "construct-outline";
 }
-
 
 function getStatusLabel(status) {
   const map = {
-    CREATED: 'Created',
-    SEARCHING: 'Searching',
-    ASSIGNED: 'Mechanic Assigned',
-    EN_ROUTE: 'Mechanic On The Way',
-    ARRIVED: 'Mechanic Arrived',
-    IN_PROGRESS: 'Service In Progress',
-    COMPLETED: 'Completed',
-    CANCELLED: 'Cancelled',
+    CREATED: "Created",
+    SEARCHING: "Searching",
+    ASSIGNED: "Mechanic Assigned",
+    EN_ROUTE: "Mechanic On The Way",
+    ARRIVED: "Mechanic Arrived",
+    IN_PROGRESS: "Service In Progress",
+    COMPLETED: "Completed",
+    CANCELLED: "Cancelled",
   };
 
-  return map[status] || status || 'Unknown';
+  return map[status] || status || "Unknown";
 }
-
 
 function getStatusIcon(status) {
   const map = {
-    CREATED: 'add-circle-outline',
-    SEARCHING: 'search-outline',
-    ASSIGNED: 'person-outline',
-    EN_ROUTE: 'navigate-outline',
-    ARRIVED: 'location-outline',
-    IN_PROGRESS: 'construct-outline',
-    COMPLETED: 'checkmark-circle-outline',
-    CANCELLED: 'close-circle-outline',
+    CREATED: "add-circle-outline",
+    SEARCHING: "search-outline",
+    ASSIGNED: "person-outline",
+    EN_ROUTE: "navigate-outline",
+    ARRIVED: "location-outline",
+    IN_PROGRESS: "construct-outline",
+    COMPLETED: "checkmark-circle-outline",
+    CANCELLED: "close-circle-outline",
   };
 
-  return map[status] || 'ellipse-outline';
+  return map[status] || "ellipse-outline";
 }
-
 
 function isTerminalStatus(status) {
-  return (
-    status === 'COMPLETED' ||
-    status === 'CANCELLED'
-  );
+  return status === "COMPLETED" || status === "CANCELLED";
 }
-
 
 // =========================================================
 // SMALL COMPONENTS
 // =========================================================
 
-function InfoRow({
-  icon,
-  label,
-  value,
-}) {
+function InfoRow({ icon, label, value }) {
   return (
     <View style={styles.infoRow}>
-
       <View style={styles.infoIcon}>
-        <Ionicons
-          name={icon}
-          size={18}
-          color={colors.accent}
-        />
+        <Ionicons name={icon} size={18} color={colors.accent} />
       </View>
 
       <View style={styles.infoTextContainer}>
+        <Text style={styles.infoLabel}>{label}</Text>
 
-        <Text style={styles.infoLabel}>
-          {label}
-        </Text>
-
-        <Text style={styles.infoValue}>
-          {value || '—'}
-        </Text>
-
+        <Text style={styles.infoValue}>{value || "—"}</Text>
       </View>
-
     </View>
   );
 }
 
-
-function SectionCard({
-  title,
-  icon,
-  children,
-}) {
+function SectionCard({ title, icon, children }) {
   return (
     <View style={styles.sectionCard}>
-
       <View style={styles.sectionHeader}>
-
         <View style={styles.sectionHeaderIcon}>
-          <Ionicons
-            name={icon}
-            size={18}
-            color={colors.accent}
-          />
+          <Ionicons name={icon} size={18} color={colors.accent} />
         </View>
 
-        <Text style={styles.sectionTitle}>
-          {title}
-        </Text>
-
+        <Text style={styles.sectionTitle}>{title}</Text>
       </View>
 
       {children}
-
     </View>
   );
 }
 
+function StatusBadge({ status }) {
+  const completed = status === "COMPLETED";
 
-function StatusBadge({
-  status,
-}) {
-  const completed =
-    status === 'COMPLETED';
+  const cancelled = status === "CANCELLED";
 
-  const cancelled =
-    status === 'CANCELLED';
+  const assigned = status === "ASSIGNED";
 
-  const assigned =
-    status === 'ASSIGNED';
+  let backgroundColor = "#F1F5F9";
 
-  let backgroundColor =
-    '#F1F5F9';
-
-  let textColor =
-    '#475569';
+  let textColor = "#475569";
 
   if (completed) {
-    backgroundColor = '#DCFCE7';
-    textColor = '#166534';
+    backgroundColor = "#DCFCE7";
+    textColor = "#166534";
   }
 
   if (cancelled) {
-    backgroundColor = '#FEE2E2';
-    textColor = '#991B1B';
+    backgroundColor = "#FEE2E2";
+    textColor = "#991B1B";
   }
 
   if (assigned) {
-    backgroundColor = '#DBEAFE';
-    textColor = '#1D4ED8';
+    backgroundColor = "#DBEAFE";
+    textColor = "#1D4ED8";
   }
 
   return (
@@ -270,230 +213,142 @@ function StatusBadge({
   );
 }
 
-
 // =========================================================
 // MAIN SCREEN
 // =========================================================
 
 export default function RequestDetailsScreen() {
+  const router = useRouter();
 
-  const router =
-    useRouter();
+  const params = useLocalSearchParams();
 
-  const params =
-    useLocalSearchParams();
+  const rawId = params?.id;
 
-  const rawId =
-    params?.id;
+  const requestId = Array.isArray(rawId) ? rawId[0] : rawId;
 
-  const requestId =
-    Array.isArray(rawId)
-      ? rawId[0]
-      : rawId;
+  const [request, setRequest] = useState(null);
 
+  const [history, setHistory] = useState([]);
 
-  const [
-    request,
-    setRequest,
-  ] = useState(null);
+  const [payment, setPayment] = useState(null);
 
-  const [
-    history,
-    setHistory,
-  ] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  const [
-    payment,
-    setPayment,
-  ] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const [
-    loading,
-    setLoading,
-  ] = useState(true);
+  const [cancelling, setCancelling] = useState(false);
 
-  const [
-    refreshing,
-    setRefreshing,
-  ] = useState(false);
-
-  const [
-    cancelling,
-    setCancelling,
-  ] = useState(false);
-
-  const [
-    error,
-    setError,
-  ] = useState(null);
-
+  const [error, setError] = useState(null);
 
   // =======================================================
   // SAFE BACK
   // =======================================================
 
-  const handleBack =
-    useCallback(() => {
-
-      try {
-
-        if (
-          typeof router.canGoBack === 'function' &&
-          router.canGoBack()
-        ) {
-          router.back();
-          return;
-        }
-
-        router.replace('/');
-
-      } catch (navigationError) {
-
-        console.log(
-          '[DRIVER REQUEST] Back navigation error:',
-          navigationError
-        );
-
-        router.replace('/');
-
+  const handleBack = useCallback(() => {
+    try {
+      if (typeof router.canGoBack === "function" && router.canGoBack()) {
+        router.back();
+        return;
       }
 
-    }, [router]);
+      router.replace("/");
+    } catch (navigationError) {
+      console.log("[DRIVER REQUEST] Back navigation error:", navigationError);
 
+      router.replace("/");
+    }
+  }, [router]);
 
   // =======================================================
   // LOAD DATA
   // =======================================================
 
-  const loadRequest =
-    useCallback(
-      async ({
-        refresh = false,
-      } = {}) => {
+  const loadRequest = useCallback(
+    async ({ refresh = false } = {}) => {
+      if (!requestId) {
+        setError("Request ID is missing.");
 
-        if (!requestId) {
+        setLoading(false);
 
-          setError(
-            'Request ID is missing.'
-          );
+        return;
+      }
 
-          setLoading(false);
-
-          return;
+      try {
+        if (refresh) {
+          setRefreshing(true);
+        } else {
+          setLoading(true);
         }
+
+        setError(null);
+
+        console.log("[DRIVER REQUEST] Loading request:", requestId);
+
+        console.log("[DRIVER REQUEST] Loading history:", requestId);
+
+        const [requestResponse, historyResponse] = await Promise.all([
+          getServiceRequestById(requestId),
+          getServiceRequestHistory(requestId),
+        ]);
+
+        let paymentResponse = null;
 
         try {
-
-          if (refresh) {
-            setRefreshing(true);
-          } else {
-            setLoading(true);
-          }
-
-          setError(null);
-
+          paymentResponse = await apiRequest(
+            `/api/v1/payments/requests/${encodeURIComponent(
+              String(requestId),
+            )}`,
+            {
+              method: "GET",
+            },
+          );
+        } catch (paymentError) {
           console.log(
-            '[DRIVER REQUEST] Loading request:',
-            requestId
+            "[DRIVER REQUEST] Payment not available yet:",
+            paymentError?.message || paymentError,
           );
 
-          console.log(
-            '[DRIVER REQUEST] Loading history:',
-            requestId
-          );
-
-          const [
-            requestResponse,
-            historyResponse,
-            paymentResponse,
-          ] =
-            await Promise.all([
-              getServiceRequestById(
-                requestId
-              ),
-              getServiceRequestHistory(
-                requestId
-              ),
-              apiRequest(
-                `/api/v1/payments/requests/${encodeURIComponent(
-                  String(requestId)
-                )}`,
-                {
-                  method: 'GET',
-                }
-              ),
-            ]);
-
-          console.log(
-            '[DRIVER REQUEST] Request details:',
-            JSON.stringify(
-              requestResponse,
-              null,
-              2
-            )
-          );
-
-          console.log(
-            '[DRIVER REQUEST] History:',
-            JSON.stringify(
-              historyResponse,
-              null,
-              2
-            )
-          );
-
-          setRequest(
-            requestResponse || null
-          );
-
-          setHistory(
-            Array.isArray(
-              historyResponse
-            )
-              ? historyResponse
-              : []
-          );
-
-          setPayment(
-            paymentResponse || null
-          );
-
-        } catch (loadError) {
-
-          console.error(
-            '[DRIVER REQUEST] Load error:',
-            loadError
-          );
-
-          setRequest(null);
-
-          setHistory([]);
-
-          setPayment(null);
-
-          setError(
-            loadError?.message ||
-            'Unable to load request details.'
-          );
-
-        } finally {
-
-          setLoading(false);
-          setRefreshing(false);
-
+          // Payment is optional until the request reaches
+          // the payment/completed stage.
+          paymentResponse = null;
         }
 
-      },
-      [requestId]
-    );
+        console.log(
+          "[DRIVER REQUEST] Request details:",
+          JSON.stringify(requestResponse, null, 2),
+        );
 
+        console.log(
+          "[DRIVER REQUEST] History:",
+          JSON.stringify(historyResponse, null, 2),
+        );
+
+        setRequest(requestResponse || null);
+
+        setHistory(Array.isArray(historyResponse) ? historyResponse : []);
+
+        setPayment(paymentResponse || null);
+      } catch (loadError) {
+        console.error("[DRIVER REQUEST] Load error:", loadError);
+
+        setRequest(null);
+
+        setHistory([]);
+
+        setPayment(null);
+
+        setError(loadError?.message || "Unable to load request details.");
+      } finally {
+        setLoading(false);
+        setRefreshing(false);
+      }
+    },
+    [requestId],
+  );
 
   useEffect(() => {
-
     loadRequest();
-
   }, [loadRequest]);
-
 
   // =======================================================
   // VIEW INVOICE
@@ -505,259 +360,162 @@ export default function RequestDetailsScreen() {
     }
 
     router.push({
-      pathname: '/breakdown/invoice',
+      pathname: "/breakdown/invoice",
       params: {
         requestId: String(requestId),
       },
     });
   }, [requestId, router]);
 
-
   // =======================================================
   // CANCEL
   // =======================================================
 
-  const handleCancel =
-    useCallback(() => {
+  const handleCancel = useCallback(() => {
+    if (!requestId) {
+      return;
+    }
 
-      if (!requestId) {
-        return;
-      }
+    if (cancelling || isTerminalStatus(request?.status)) {
+      return;
+    }
 
-      if (
-        cancelling ||
-        isTerminalStatus(
-          request?.status
-        )
-      ) {
-        return;
-      }
+    Alert.alert(
+      "Cancel Request",
+      "Are you sure you want to cancel this service request?",
+      [
+        {
+          text: "No",
+          style: "cancel",
+        },
+        {
+          text: "Yes, Cancel",
+          style: "destructive",
+          onPress: async () => {
+            try {
+              setCancelling(true);
 
-      Alert.alert(
-        'Cancel Request',
-        'Are you sure you want to cancel this service request?',
-        [
-          {
-            text: 'No',
-            style: 'cancel',
+              console.log("[DRIVER REQUEST] Cancelling:", requestId);
+
+              const response = await cancelServiceRequest(requestId);
+
+              console.log(
+                "[DRIVER REQUEST] Cancel response:",
+                JSON.stringify(response, null, 2),
+              );
+
+              await loadRequest({
+                refresh: true,
+              });
+            } catch (cancelError) {
+              console.error("[DRIVER REQUEST] Cancel error:", cancelError);
+
+              Alert.alert(
+                "Unable to Cancel",
+                cancelError?.message || "Unable to cancel the request.",
+              );
+            } finally {
+              setCancelling(false);
+            }
           },
-          {
-            text: 'Yes, Cancel',
-            style: 'destructive',
-            onPress: async () => {
-
-              try {
-
-                setCancelling(true);
-
-                console.log(
-                  '[DRIVER REQUEST] Cancelling:',
-                  requestId
-                );
-
-                const response =
-                  await cancelServiceRequest(
-                    requestId
-                  );
-
-                console.log(
-                  '[DRIVER REQUEST] Cancel response:',
-                  JSON.stringify(
-                    response,
-                    null,
-                    2
-                  )
-                );
-
-                await loadRequest({
-                  refresh: true,
-                });
-
-              } catch (cancelError) {
-
-                console.error(
-                  '[DRIVER REQUEST] Cancel error:',
-                  cancelError
-                );
-
-                Alert.alert(
-                  'Unable to Cancel',
-                  cancelError?.message ||
-                  'Unable to cancel the request.'
-                );
-
-              } finally {
-
-                setCancelling(false);
-
-              }
-
-            },
-          },
-        ]
-      );
-
-    }, [
-      requestId,
-      request?.status,
-      cancelling,
-      loadRequest,
-    ]);
-
+        },
+      ],
+    );
+  }, [requestId, request?.status, cancelling, loadRequest]);
 
   // =======================================================
   // DERIVED DATA
   // =======================================================
 
-  const categoryLabel =
-    useMemo(
-      () =>
-        getCategoryLabel(
-          request?.category
-        ),
-      [request?.category]
-    );
+  const categoryLabel = useMemo(
+    () => getCategoryLabel(request?.category),
+    [request?.category],
+  );
 
-
-  const categoryIcon =
-    useMemo(
-      () =>
-        getCategoryIcon(
-          request?.category
-        ),
-      [request?.category]
-    );
-
+  const categoryIcon = useMemo(
+    () => getCategoryIcon(request?.category),
+    [request?.category],
+  );
 
   // =======================================================
   // LOADING
   // =======================================================
 
   if (loading) {
-
     return (
       <View style={styles.container}>
-
         <View style={styles.simpleTopBar}>
-
           <TouchableOpacity
             style={styles.backButton}
             activeOpacity={0.8}
             onPress={handleBack}
           >
-            <Ionicons
-              name="arrow-back"
-              size={22}
-              color={colors.text}
-            />
+            <Ionicons name="arrow-back" size={22} color={colors.text} />
           </TouchableOpacity>
 
-          <Text style={styles.topBarTitle}>
-            Request Details
-          </Text>
+          <Text style={styles.topBarTitle}>Request Details</Text>
 
           <View style={styles.topBarSpacer} />
-
         </View>
 
         <View style={styles.centerContent}>
+          <ActivityIndicator size="small" color={colors.accent} />
 
-          <ActivityIndicator
-            size="small"
-            color={colors.accent}
-          />
-
-          <Text style={styles.centerText}>
-            Loading request details...
-          </Text>
-
+          <Text style={styles.centerText}>Loading request details...</Text>
         </View>
-
       </View>
     );
   }
-
 
   // =======================================================
   // ERROR / NOT FOUND
   // =======================================================
 
-  if (
-    error ||
-    !request
-  ) {
-
+  if (error || !request) {
     return (
       <View style={styles.container}>
-
         <View style={styles.simpleTopBar}>
-
           <TouchableOpacity
             style={styles.backButton}
             activeOpacity={0.8}
             onPress={handleBack}
           >
-            <Ionicons
-              name="arrow-back"
-              size={22}
-              color={colors.text}
-            />
+            <Ionicons name="arrow-back" size={22} color={colors.text} />
           </TouchableOpacity>
 
-          <Text style={styles.topBarTitle}>
-            Request Details
-          </Text>
+          <Text style={styles.topBarTitle}>Request Details</Text>
 
           <View style={styles.topBarSpacer} />
-
         </View>
 
         <View style={styles.centerContent}>
-
           <View style={styles.errorIcon}>
-
             <Ionicons
               name="alert-circle-outline"
               size={42}
               color={colors.accent}
             />
-
           </View>
 
-          <Text style={styles.errorTitle}>
-            Request not found
-          </Text>
+          <Text style={styles.errorTitle}>Request not found</Text>
 
           <Text style={styles.errorText}>
-            {error || 'Unable to load this service request.'}
+            {error || "Unable to load this service request."}
           </Text>
 
           <TouchableOpacity
             style={styles.retryButton}
             activeOpacity={0.85}
-            onPress={() =>
-              loadRequest()
-            }
+            onPress={() => loadRequest()}
           >
+            <Ionicons name="refresh-outline" size={18} color={colors.white} />
 
-            <Ionicons
-              name="refresh-outline"
-              size={18}
-              color={colors.white}
-            />
-
-            <Text style={styles.retryButtonText}>
-              Try Again
-            </Text>
-
+            <Text style={styles.retryButtonText}>Try Again</Text>
           </TouchableOpacity>
-
         </View>
-
       </View>
     );
   }
-
 
   // =======================================================
   // MAIN RENDER
@@ -765,29 +523,19 @@ export default function RequestDetailsScreen() {
 
   return (
     <View style={styles.container}>
-
       <View style={styles.simpleTopBar}>
-
         <TouchableOpacity
           style={styles.backButton}
           activeOpacity={0.8}
           onPress={handleBack}
         >
-          <Ionicons
-            name="arrow-back"
-            size={22}
-            color={colors.text}
-          />
+          <Ionicons name="arrow-back" size={22} color={colors.text} />
         </TouchableOpacity>
 
-        <Text style={styles.topBarTitle}>
-          Request Details
-        </Text>
+        <Text style={styles.topBarTitle}>Request Details</Text>
 
         <View style={styles.topBarSpacer} />
-
       </View>
-
 
       <ScrollView
         showsVerticalScrollIndicator={false}
@@ -804,56 +552,33 @@ export default function RequestDetailsScreen() {
           />
         }
       >
-
         {/* =================================================
             REQUEST HERO
         ================================================= */}
 
         <View style={styles.heroCard}>
-
           <View style={styles.heroTop}>
-
             <View style={styles.categoryIcon}>
-
-              <Ionicons
-                name={categoryIcon}
-                size={26}
-                color={colors.accent}
-              />
-
+              <Ionicons name={categoryIcon} size={26} color={colors.accent} />
             </View>
 
             <View style={styles.heroText}>
+              <Text style={styles.categoryLabel}>{categoryLabel}</Text>
 
-              <Text style={styles.categoryLabel}>
-                {categoryLabel}
-              </Text>
+              <Text style={styles.requestIdLabel}>Request ID</Text>
 
-              <Text style={styles.requestIdLabel}>
-                Request ID
-              </Text>
-
-              <Text
-                style={styles.requestId}
-                numberOfLines={1}
-              >
+              <Text style={styles.requestId} numberOfLines={1}>
                 {request.id}
               </Text>
-
             </View>
 
-            <StatusBadge
-              status={request.status}
-            />
-
+            <StatusBadge status={request.status} />
           </View>
 
           <View style={styles.heroDivider} />
 
           <View style={styles.heroMeta}>
-
             <View style={styles.metaItem}>
-
               <Ionicons
                 name="calendar-outline"
                 size={16}
@@ -863,11 +588,9 @@ export default function RequestDetailsScreen() {
               <Text style={styles.metaText}>
                 {formatDate(request.createdAt)}
               </Text>
-
             </View>
 
             <View style={styles.metaItem}>
-
               <Ionicons
                 name="time-outline"
                 size={16}
@@ -877,23 +600,15 @@ export default function RequestDetailsScreen() {
               <Text style={styles.metaText}>
                 {formatTime(request.createdAt)}
               </Text>
-
             </View>
-
           </View>
-
         </View>
-
 
         {/* =================================================
             REQUEST INFORMATION
         ================================================= */}
 
-        <SectionCard
-          title="Request Information"
-          icon="document-text-outline"
-        >
-
+        <SectionCard title="Request Information" icon="document-text-outline">
           <InfoRow
             icon="construct-outline"
             label="Service"
@@ -916,10 +631,9 @@ export default function RequestDetailsScreen() {
             icon="navigate-outline"
             label="Latitude"
             value={
-              request.latitude !== null &&
-              request.latitude !== undefined
+              request.latitude !== null && request.latitude !== undefined
                 ? String(request.latitude)
-                : '—'
+                : "—"
             }
           />
 
@@ -927,25 +641,18 @@ export default function RequestDetailsScreen() {
             icon="navigate-outline"
             label="Longitude"
             value={
-              request.longitude !== null &&
-              request.longitude !== undefined
+              request.longitude !== null && request.longitude !== undefined
                 ? String(request.longitude)
-                : '—'
+                : "—"
             }
           />
 
           <InfoRow
             icon="calendar-outline"
             label="Created"
-            value={
-              formatDateTime(
-                request.createdAt
-              )
-            }
+            value={formatDateTime(request.createdAt)}
           />
-
         </SectionCard>
-
 
         {/* =================================================
             DESCRIPTION
@@ -955,197 +662,112 @@ export default function RequestDetailsScreen() {
           title="Problem Description"
           icon="chatbox-ellipses-outline"
         >
-
           <Text style={styles.descriptionText}>
             {request.description
               ? request.description
-              : 'No additional description provided.'}
+              : "No additional description provided."}
           </Text>
-
         </SectionCard>
-
 
         {/* =================================================
             VEHICLE
         ================================================= */}
 
-        <SectionCard
-          title="Vehicle"
-          icon="car-outline"
-        >
-
+        <SectionCard title="Vehicle" icon="car-outline">
           <InfoRow
             icon="barcode-outline"
             label="Vehicle ID"
             value={request.vehicleId}
           />
-
         </SectionCard>
-
 
         {/* =================================================
             MECHANIC ASSIGNMENT
         ================================================= */}
 
-        <SectionCard
-          title="Mechanic Assignment"
-          icon="person-outline"
-        >
-
+        <SectionCard title="Mechanic Assignment" icon="person-outline">
           <InfoRow
             icon="person-circle-outline"
             label="Mechanic Status"
             value={
               request.assignedMechanicId
-                ? 'Mechanic Assigned'
-                : 'Searching for Mechanic'
+                ? "Mechanic Assigned"
+                : "Searching for Mechanic"
             }
           />
 
           <InfoRow
             icon="key-outline"
             label="Mechanic ID"
-            value={
-              request.assignedMechanicId ||
-              'Not assigned yet'
-            }
+            value={request.assignedMechanicId || "Not assigned yet"}
           />
-
         </SectionCard>
-
 
         {/* =================================================
             STATUS TIMELINE
         ================================================= */}
 
-        <SectionCard
-          title="Request Timeline"
-          icon="time-outline"
-        >
-
+        <SectionCard title="Request Timeline" icon="time-outline">
           {history.length === 0 ? (
-
-            <Text style={styles.emptyText}>
-              No status history available.
-            </Text>
-
+            <Text style={styles.emptyText}>No status history available.</Text>
           ) : (
-
             <View style={styles.timeline}>
+              {history.map((item, index) => {
+                const isLast = index === history.length - 1;
 
-              {history.map(
-                (item, index) => {
-
-                  const isLast =
-                    index ===
-                    history.length - 1;
-
-                  return (
-                    <View
-                      key={
-                        item.id ||
-                        `${item.status}-${index}`
-                      }
-                      style={styles.timelineRow}
-                    >
-
-                      <View style={styles.timelineLeft}>
-
-                        <View
-                          style={[
-                            styles.timelineIcon,
-                            isLast &&
-                              styles.timelineIconActive,
-                          ]}
-                        >
-
-                          <Ionicons
-                            name={
-                              getStatusIcon(
-                                item.status
-                              )
-                            }
-                            size={16}
-                            color={
-                              isLast
-                                ? colors.white
-                                : colors.accent
-                            }
-                          />
-
-                        </View>
-
-                        {!isLast ? (
-                          <View
-                            style={styles.timelineLine}
-                          />
-                        ) : null}
-
-                      </View>
-
+                return (
+                  <View
+                    key={item.id || `${item.status}-${index}`}
+                    style={styles.timelineRow}
+                  >
+                    <View style={styles.timelineLeft}>
                       <View
-                        style={styles.timelineContent}
+                        style={[
+                          styles.timelineIcon,
+                          isLast && styles.timelineIconActive,
+                        ]}
                       >
-
-                        <Text
-                          style={
-                            styles.timelineStatus
-                          }
-                        >
-                          {getStatusLabel(
-                            item.status
-                          )}
-                        </Text>
-
-                        <Text
-                          style={
-                            styles.timelineDate
-                          }
-                        >
-                          {formatDate(
-                            item.createdAt
-                          )}
-                          {' '}
-                          {formatTime(
-                            item.createdAt
-                          )}
-                        </Text>
-
-                        {item.notes ? (
-                          <Text
-                            style={
-                              styles.timelineNotes
-                            }
-                          >
-                            {item.notes}
-                          </Text>
-                        ) : null}
-
+                        <Ionicons
+                          name={getStatusIcon(item.status)}
+                          size={16}
+                          color={isLast ? colors.white : colors.accent}
+                        />
                       </View>
 
+                      {!isLast ? <View style={styles.timelineLine} /> : null}
                     </View>
-                  );
 
-                }
-              )}
+                    <View style={styles.timelineContent}>
+                      <Text style={styles.timelineStatus}>
+                        {getStatusLabel(item.status)}
+                      </Text>
 
+                      <Text style={styles.timelineDate}>
+                        {formatDate(item.createdAt)}{" "}
+                        {formatTime(item.createdAt)}
+                      </Text>
+
+                      {item.notes ? (
+                        <Text style={styles.timelineNotes}>{item.notes}</Text>
+                      ) : null}
+                    </View>
+                  </View>
+                );
+              })}
             </View>
-
           )}
-
         </SectionCard>
-
 
         {/* =================================================
             PAYMENT / INVOICE
         ================================================= */}
 
-        {request.status === 'COMPLETED' &&
+        {request.status === "COMPLETED" &&
         payment &&
-        ['PAID', 'SUCCESS', 'COMPLETED'].includes(
-          String(payment.status || '')
+        ["PAID", "SUCCESS", "COMPLETED"].includes(
+          String(payment.status || "")
             .trim()
-            .toUpperCase()
+            .toUpperCase(),
         ) ? (
           <View style={styles.invoiceCard}>
             <View style={styles.invoiceInfo}>
@@ -1158,15 +780,11 @@ export default function RequestDetailsScreen() {
               </View>
 
               <View style={styles.invoiceTextContainer}>
-                <Text style={styles.invoiceTitle}>
-                  Payment Completed
-                </Text>
+                <Text style={styles.invoiceTitle}>Payment Completed</Text>
 
                 <Text style={styles.invoiceSubtitle}>
-                  ₹{Number(payment.amount || 0).toFixed(0)} •{' '}
-                  {String(
-                    payment.paymentMethod || 'Payment'
-                  ).toUpperCase()}
+                  ₹{Number(payment.amount || 0).toFixed(0)} •{" "}
+                  {String(payment.paymentMethod || "Payment").toUpperCase()}
                 </Text>
               </View>
             </View>
@@ -1182,76 +800,49 @@ export default function RequestDetailsScreen() {
                 color={colors.white}
               />
 
-              <Text style={styles.invoiceButtonText}>
-                VIEW INVOICE
-              </Text>
+              <Text style={styles.invoiceButtonText}>VIEW INVOICE</Text>
             </TouchableOpacity>
           </View>
         ) : null}
-
 
         {/* =================================================
             CANCEL
         ================================================= */}
 
-        {!isTerminalStatus(
-          request.status
-        ) ? (
-
+        {!isTerminalStatus(request.status) ? (
           <TouchableOpacity
-            style={[
-              styles.cancelButton,
-              cancelling &&
-                styles.disabledButton,
-            ]}
+            style={[styles.cancelButton, cancelling && styles.disabledButton]}
             activeOpacity={0.85}
             disabled={cancelling}
             onPress={handleCancel}
           >
-
             {cancelling ? (
-
-              <ActivityIndicator
-                size="small"
-                color={colors.white}
-              />
-
+              <ActivityIndicator size="small" color={colors.white} />
             ) : (
-
               <Ionicons
                 name="close-circle-outline"
                 size={20}
                 color={colors.white}
               />
-
             )}
 
             <Text style={styles.cancelButtonText}>
-              {cancelling
-                ? 'Cancelling...'
-                : 'Cancel Request'}
+              {cancelling ? "Cancelling..." : "Cancel Request"}
             </Text>
-
           </TouchableOpacity>
-
         ) : null}
 
-
         <View style={styles.bottomSpace} />
-
       </ScrollView>
-
     </View>
   );
 }
-
 
 // =========================================================
 // STYLES
 // =========================================================
 
 const styles = StyleSheet.create({
-
   container: {
     flex: 1,
     backgroundColor: colors.background,
@@ -1260,9 +851,9 @@ const styles = StyleSheet.create({
   simpleTopBar: {
     minHeight: 64,
     paddingHorizontal: 16,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
     backgroundColor: colors.background,
   },
 
@@ -1270,18 +861,18 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 21,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     backgroundColor: colors.white,
   },
 
   topBarTitle: {
     flex: 1,
     marginHorizontal: 12,
-    fontFamily: 'InterSemiBold',
+    fontFamily: "InterSemiBold",
     fontSize: 18,
     color: colors.text,
-    textAlign: 'center',
+    textAlign: "center",
   },
 
   topBarSpacer: {
@@ -1291,43 +882,43 @@ const styles = StyleSheet.create({
 
   centerContent: {
     flex: 1,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     paddingHorizontal: 32,
   },
 
   centerText: {
     marginTop: 12,
-    fontFamily: 'InterRegular',
+    fontFamily: "InterRegular",
     fontSize: 14,
     color: colors.textMuted,
-    textAlign: 'center',
+    textAlign: "center",
   },
 
   errorIcon: {
     width: 76,
     height: 76,
     borderRadius: 38,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     backgroundColor: colors.white,
     marginBottom: 16,
   },
 
   errorTitle: {
-    fontFamily: 'InterSemiBold',
+    fontFamily: "InterSemiBold",
     fontSize: 20,
     color: colors.text,
-    textAlign: 'center',
+    textAlign: "center",
   },
 
   errorText: {
     marginTop: 8,
-    fontFamily: 'InterRegular',
+    fontFamily: "InterRegular",
     fontSize: 14,
     lineHeight: 21,
     color: colors.textMuted,
-    textAlign: 'center',
+    textAlign: "center",
   },
 
   retryButton: {
@@ -1335,15 +926,15 @@ const styles = StyleSheet.create({
     minHeight: 46,
     paddingHorizontal: 20,
     borderRadius: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     backgroundColor: colors.accent,
   },
 
   retryButtonText: {
     marginLeft: 8,
-    fontFamily: 'InterSemiBold',
+    fontFamily: "InterSemiBold",
     fontSize: 14,
     color: colors.white,
   },
@@ -1362,17 +953,17 @@ const styles = StyleSheet.create({
   },
 
   heroTop: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
 
   categoryIcon: {
     width: 54,
     height: 54,
     borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#F1F5F9',
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F1F5F9",
   },
 
   heroText: {
@@ -1382,21 +973,21 @@ const styles = StyleSheet.create({
   },
 
   categoryLabel: {
-    fontFamily: 'InterSemiBold',
+    fontFamily: "InterSemiBold",
     fontSize: 16,
     color: colors.text,
   },
 
   requestIdLabel: {
     marginTop: 4,
-    fontFamily: 'InterRegular',
+    fontFamily: "InterRegular",
     fontSize: 10,
     color: colors.textMuted,
   },
 
   requestId: {
     marginTop: 2,
-    fontFamily: 'InterMedium',
+    fontFamily: "InterMedium",
     fontSize: 10,
     color: colors.textMuted,
   },
@@ -1408,30 +999,30 @@ const styles = StyleSheet.create({
   },
 
   statusBadgeText: {
-    fontFamily: 'InterSemiBold',
+    fontFamily: "InterSemiBold",
     fontSize: 10,
   },
 
   heroDivider: {
     height: 1,
-    backgroundColor: '#E2E8F0',
+    backgroundColor: "#E2E8F0",
     marginVertical: 14,
   },
 
   heroMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
   },
 
   metaItem: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginRight: 20,
   },
 
   metaText: {
     marginLeft: 6,
-    fontFamily: 'InterRegular',
+    fontFamily: "InterRegular",
     fontSize: 12,
     color: colors.textMuted,
   },
@@ -1444,8 +1035,8 @@ const styles = StyleSheet.create({
   },
 
   sectionHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginBottom: 14,
   },
 
@@ -1453,21 +1044,21 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#F1F5F9',
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F1F5F9",
   },
 
   sectionTitle: {
     marginLeft: 10,
-    fontFamily: 'InterSemiBold',
+    fontFamily: "InterSemiBold",
     fontSize: 15,
     color: colors.text,
   },
 
   infoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingVertical: 9,
   },
 
@@ -1475,9 +1066,9 @@ const styles = StyleSheet.create({
     width: 34,
     height: 34,
     borderRadius: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#F8FAFC',
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F8FAFC",
   },
 
   infoTextContainer: {
@@ -1486,27 +1077,27 @@ const styles = StyleSheet.create({
   },
 
   infoLabel: {
-    fontFamily: 'InterRegular',
+    fontFamily: "InterRegular",
     fontSize: 10,
     color: colors.textMuted,
   },
 
   infoValue: {
     marginTop: 2,
-    fontFamily: 'InterMedium',
+    fontFamily: "InterMedium",
     fontSize: 13,
     color: colors.text,
   },
 
   descriptionText: {
-    fontFamily: 'InterRegular',
+    fontFamily: "InterRegular",
     fontSize: 13,
     lineHeight: 21,
     color: colors.text,
   },
 
   emptyText: {
-    fontFamily: 'InterRegular',
+    fontFamily: "InterRegular",
     fontSize: 13,
     lineHeight: 20,
     color: colors.textMuted,
@@ -1517,21 +1108,21 @@ const styles = StyleSheet.create({
   },
 
   timelineRow: {
-    flexDirection: 'row',
+    flexDirection: "row",
   },
 
   timelineLeft: {
     width: 32,
-    alignItems: 'center',
+    alignItems: "center",
   },
 
   timelineIcon: {
     width: 30,
     height: 30,
     borderRadius: 15,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#F1F5F9',
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#F1F5F9",
   },
 
   timelineIconActive: {
@@ -1542,7 +1133,7 @@ const styles = StyleSheet.create({
     width: 1,
     flex: 1,
     minHeight: 34,
-    backgroundColor: '#CBD5E1',
+    backgroundColor: "#CBD5E1",
   },
 
   timelineContent: {
@@ -1552,21 +1143,21 @@ const styles = StyleSheet.create({
   },
 
   timelineStatus: {
-    fontFamily: 'InterSemiBold',
+    fontFamily: "InterSemiBold",
     fontSize: 13,
     color: colors.text,
   },
 
   timelineDate: {
     marginTop: 3,
-    fontFamily: 'InterRegular',
+    fontFamily: "InterRegular",
     fontSize: 10,
     color: colors.textMuted,
   },
 
   timelineNotes: {
     marginTop: 5,
-    fontFamily: 'InterRegular',
+    fontFamily: "InterRegular",
     fontSize: 11,
     lineHeight: 17,
     color: colors.textMuted,
@@ -1586,8 +1177,8 @@ const styles = StyleSheet.create({
   },
 
   invoiceInfo: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginBottom: 13,
   },
 
@@ -1595,8 +1186,8 @@ const styles = StyleSheet.create({
     width: 42,
     height: 42,
     borderRadius: 12,
-    alignItems: 'center',
-    justifyContent: 'center',
+    alignItems: "center",
+    justifyContent: "center",
     backgroundColor: colors.successLight,
   },
 
@@ -1606,14 +1197,14 @@ const styles = StyleSheet.create({
   },
 
   invoiceTitle: {
-    fontFamily: 'InterSemiBold',
+    fontFamily: "InterSemiBold",
     fontSize: 14,
     color: colors.text,
   },
 
   invoiceSubtitle: {
     marginTop: 3,
-    fontFamily: 'InterRegular',
+    fontFamily: "InterRegular",
     fontSize: 11,
     color: colors.textMuted,
   },
@@ -1621,15 +1212,15 @@ const styles = StyleSheet.create({
   invoiceButton: {
     minHeight: 48,
     borderRadius: 13,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
     backgroundColor: colors.accent,
     gap: 8,
   },
 
   invoiceButtonText: {
-    fontFamily: 'InterSemiBold',
+    fontFamily: "InterSemiBold",
     fontSize: 12,
     color: colors.white,
   },
@@ -1637,10 +1228,10 @@ const styles = StyleSheet.create({
   cancelButton: {
     minHeight: 50,
     borderRadius: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: '#DC2626',
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    backgroundColor: "#DC2626",
     marginBottom: 4,
   },
 
@@ -1650,7 +1241,7 @@ const styles = StyleSheet.create({
 
   cancelButtonText: {
     marginLeft: 8,
-    fontFamily: 'InterSemiBold',
+    fontFamily: "InterSemiBold",
     fontSize: 14,
     color: colors.white,
   },
@@ -1658,5 +1249,4 @@ const styles = StyleSheet.create({
   bottomSpace: {
     height: 30,
   },
-
 });
